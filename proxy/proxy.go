@@ -109,6 +109,10 @@ func (p *Proxy) getPool(read bool) *pool.Pool {
 	return <-p.writePools
 }
 
+func (p *Proxy) GetPool(read bool) *pool.Pool {
+	return p.getPool(read)
+}
+
 // Return the pool. If read is 'true' then, the pool will be returned to the
 // 'read-only' collection of pools. Otherwise, it will be returned to the
 // 'read-write' collection of pools.
@@ -118,6 +122,10 @@ func (p *Proxy) returnPool(pl *pool.Pool, read bool) {
 	} else {
 		p.writePools <- pl
 	}
+}
+
+func (p *Proxy) ReturnPool(pl *pool.Pool, read bool) {
+	p.returnPool(pl, read)
 }
 
 // HandleConnection handle an incoming connection to the proxy

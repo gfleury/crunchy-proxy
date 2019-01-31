@@ -26,6 +26,12 @@ func Send(connection net.Conn, message []byte) (int, error) {
 	return connection.Write(message)
 }
 
+func Read(connection net.Conn, size int) ([]byte, int, error) {
+	buffer := make([]byte, size)
+	length, err := connection.Read(buffer)
+	return buffer, length, err
+}
+
 func Receive(connection net.Conn) ([]byte, int, error) {
 	buffer := make([]byte, 4096)
 	length, err := connection.Read(buffer)

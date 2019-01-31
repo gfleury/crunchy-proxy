@@ -37,7 +37,7 @@ clean:
 
 resolve:
 	@echo "Resolving depenencies..."
-	@glide up
+	@dep ensure
 
 build:
 	@echo "Building project..."
