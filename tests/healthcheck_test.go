@@ -15,31 +15,28 @@ package tests
 
 import (
 	"bytes"
+	"gopkg.in/check.v1"
 	"log"
 	"net/http"
 	"os/exec"
-	"testing"
 	"time"
 )
 
-func TestHealthcheck(t *testing.T) {
+func (s *S) TestHealthcheck(c *check.C) {
 	const SLEEP_TIME = 6
 	log.SetFlags(log.Ltime | log.Lmicroseconds)
 	log.Println("TestHealthcheck was called")
 	var startTime = time.Now()
 	conn, err := Connect()
 	defer conn.Close()
-	if err != nil {
-		t.FailNow()
-	}
+	c.Check(err, check.IsNil)
 
 	//read the proxy event stream which equates to a healthcheck
 	//has just been performed...after which we will have a retry test
 	//window
 	_, err = http.Get("http://localhost:10000/api/stream")
-	if err != nil {
-		t.FailNow()
-	}
+	c.Check(err, check.IsNil)
+
 	log.Println("after the GET")
 
 	//shut down the replica
@@ -49,11 +46,8 @@ func TestHealthcheck(t *testing.T) {
 	cmd.Stdout = &cmdStdout
 	cmd.Stderr = &cmdStderr
 	err = cmd.Run()
-	if err != nil {
-		log.Println("docker stop stdout=" + cmdStdout.String())
-		log.Println("docker stop stderr=" + cmdStderr.String())
-		t.FailNow()
-	}
+	c.Check(err, check.IsNil)
+
 	log.Println("docker stop stdout=" + cmdStdout.String())
 
 	//sleep a bit to give the replica time to stop
@@ -63,19 +57,15 @@ func TestHealthcheck(t *testing.T) {
 	//read the proxy event stream which should test that healthcheck
 	//still works after a backend has been shutdown
 	_, err = http.Get("http://localhost:10000/api/stream")
-	if err != nil {
-		t.FailNow()
-	}
+	c.Check(err, check.IsNil)
+
 	log.Println("after the 2nd GET")
 
 	//restart the replica after the test
 	cmd = exec.Command("docker", "start", "replica")
 	err = cmd.Run()
-	if err != nil {
-		log.Println("docker start stdout=" + cmdStdout.String())
-		log.Println("docker start stderr=" + cmdStderr.String())
-		t.FailNow()
-	}
+	c.Check(err, check.IsNil)
+
 	log.Println("docker start stdout=" + cmdStdout.String())
 	//sleep a bit to give the replica time to restart
 	log.Println("sleeping to let replica restart")

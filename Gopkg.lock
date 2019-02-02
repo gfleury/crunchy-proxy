@@ -7,6 +7,12 @@
   revision = "85b1699d505667d13f8ac4478c1debbf85d6c5de"
 
 [[projects]]
+  name = "github.com/akutz/memconn"
+  packages = ["."]
+  revision = "51f5f0e8c29b11eaef960ca1b0df970006ccda2c"
+  version = "v0.1.0"
+
+[[projects]]
   name = "github.com/fsnotify/fsnotify"
   packages = ["."]
   revision = "4da3e2cfbabc9f751898f250b49f2439785783a1"
@@ -46,6 +52,18 @@
   packages = ["."]
   revision = "ffa96de2479e10ecd06aca8069bf9c55a86701b5"
   version = "v1.4.0"
+
+[[projects]]
+  name = "github.com/kr/pretty"
+  packages = ["."]
+  revision = "73f6ac0b30a98e433b289500d779f50c1a6f0712"
+  version = "v0.1.0"
+
+[[projects]]
+  name = "github.com/kr/text"
+  packages = ["."]
+  revision = "e2ffdb16a802fe2bb95e2e35ff34f0e53aeef34f"
+  version = "v0.1.0"
 
 [[projects]]
   name = "github.com/lib/pq"
@@ -187,6 +205,12 @@
   version = "v1.4.0"
 
 [[projects]]
+  branch = "v1"
+  name = "gopkg.in/check.v1"
+  packages = ["."]
+  revision = "788fd78401277ebd861206a03c884797c6ec5541"
+
+[[projects]]
   name = "gopkg.in/yaml.v2"
   packages = ["."]
   revision = "cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b"
@@ -194,6 +218,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "ab6a1c202886e3610df736c899c984b300ef20db6719c4d66bc24ca8bf807244"
+  inputs-digest = "c6ea5e231c258c5c41a46cddb6666b3420bfba2421da9a2da5a942a0490e4d77"
   solver-name = "gps-cdcl"
   solver-version = 1

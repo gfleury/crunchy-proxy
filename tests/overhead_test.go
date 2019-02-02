@@ -15,27 +15,23 @@ package tests
 
 import (
 	"database/sql"
+	"gopkg.in/check.v1"
 	"log"
-	"testing"
 	"time"
 )
 
-func TestOverhead(t *testing.T) {
+func (s *S) TestOverhead(c *check.C) {
 	var proxyconn, conn *sql.DB
 	var err error
 
 	log.SetFlags(log.Ltime | log.Lmicroseconds)
 	log.Println("TestOverhead was called")
 	proxyconn, err = Connect()
-	if err != nil {
-		t.FailNow()
-	}
+	c.Check(err, check.IsNil)
 
 	HostPort = "localhost:12000"
 	conn, err = Connect()
-	if err != nil {
-		t.FailNow()
-	}
+	c.Check(err, check.IsNil)
 
 	log.Println("")
 	log.Println("Overhead (no annotation)")
@@ -44,32 +40,14 @@ func TestOverhead(t *testing.T) {
 	var timestamp string
 	var proxyStartTime = time.Now()
 	err = proxyconn.QueryRow("select now()").Scan(&timestamp)
-	switch {
-	case err == sql.ErrNoRows:
-		log.Println("no rows returned")
-		t.FailNow()
-	case err != nil:
-		log.Println(err.Error())
-		t.FailNow()
-	default:
-		//log.Println(timestamp + " was returned")
-	}
+	c.Check(err, check.ErrorMatches, sql.ErrNoRows.Error())
 
 	proxyDuration := time.Since(proxyStartTime)
 	log.Printf("Proxy Duration (no annotation) %s\n", proxyDuration)
 
 	noProxyStartTime := time.Now()
 	err = conn.QueryRow("select now()").Scan(&timestamp)
-	switch {
-	case err == sql.ErrNoRows:
-		log.Println("no rows returned")
-		t.FailNow()
-	case err != nil:
-		log.Println(err.Error())
-		t.FailNow()
-	default:
-		//log.Println(timestamp + " was returned")
-	}
+	c.Check(err, check.ErrorMatches, sql.ErrNoRows.Error())
 
 	noProxyDuration := time.Since(noProxyStartTime)
 	log.Printf("No Proxy Duration (no annotation) %s\n", noProxyDuration)
@@ -77,16 +55,7 @@ func TestOverhead(t *testing.T) {
 	log.Printf("Proxy Overhead (no annotation) %s\n", proxyDuration-noProxyDuration)
 	proxyStartTime = time.Now()
 	err = proxyconn.QueryRow("/* read */select now()").Scan(&timestamp)
-	switch {
-	case err == sql.ErrNoRows:
-		log.Println("no rows returned")
-		t.FailNow()
-	case err != nil:
-		log.Println(err.Error())
-		t.FailNow()
-	default:
-		//log.Println(timestamp + " was returned")
-	}
+	c.Check(err, check.ErrorMatches, sql.ErrNoRows.Error())
 
 	log.Println("")
 	log.Println("Overhead (annotation is supplied)")
@@ -97,16 +66,7 @@ func TestOverhead(t *testing.T) {
 
 	noProxyStartTime = time.Now()
 	err = conn.QueryRow("/* read */select now()").Scan(&timestamp)
-	switch {
-	case err == sql.ErrNoRows:
-		log.Println("no rows returned")
-		t.FailNow()
-	case err != nil:
-		log.Println(err.Error())
-		t.FailNow()
-	default:
-		//log.Println(timestamp + " was returned")
-	}
+	c.Check(err, check.ErrorMatches, sql.ErrNoRows.Error())
 
 	noProxyDuration = time.Since(noProxyStartTime)
 	log.Printf("No Proxy Duration (annotation) %s\n", noProxyDuration)

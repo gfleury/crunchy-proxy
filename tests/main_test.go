@@ -15,20 +15,36 @@ package tests
 
 import (
 	"flag"
-	"os"
 	"testing"
+
+	"gopkg.in/check.v1"
 )
 
 var HostPort string
 var rows, userid, password, database string
 
-func TestMain(m *testing.M) {
+var _ = check.Suite(&S{})
+
+type S struct {
+}
+
+func Test(t *testing.T) { check.TestingT(t) }
+
+func (s *S) SetUpSuite(c *check.C) {
 	flag.StringVar(&rows, "rows", "onerow", "onerow or tworows")
-	flag.StringVar(&HostPort, "hostport", "localhost:5432", "host:port")
+	flag.StringVar(&HostPort, "hostport", "localhost:5433", "host:port")
 	flag.StringVar(&userid, "userid", "postgres", "postgres userid")
 	flag.StringVar(&password, "password", "password", "postgres password")
 	flag.StringVar(&database, "database", "postgres", "database")
 	flag.Parse()
-	os.Exit(m.Run())
+}
+
+func (s *S) TearDownSuite(c *check.C) {
+}
+
+func (s *S) SetUpTest(c *check.C) {
+}
+
+func (s *S) TestStatus(c *check.C) {
 
 }

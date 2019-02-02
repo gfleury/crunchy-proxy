@@ -14,36 +14,26 @@ limitations under the License.
 package tests
 
 import (
-	"database/sql"
+	"gopkg.in/check.v1"
 	"log"
-	"testing"
 	"time"
 )
 
-func TestTxn(t *testing.T) {
+func (s *S) TestTxn(c *check.C) {
 	log.SetFlags(log.Ltime | log.Lmicroseconds)
 	log.Println("TestTxn was called")
 	var startTime = time.Now()
 	conn, err := Connect()
 	defer conn.Close()
-	if err != nil {
-		t.FailNow()
-	}
+	c.Check(err, check.IsNil)
 
 	var timestamp string
 	_, err = conn.Exec("/* start */ begin")
 	err = conn.QueryRow("/* read */ select text(now())").Scan(&timestamp)
-	switch {
-	case err == sql.ErrNoRows:
-		log.Println("no rows returned")
-		t.FailNow()
-	case err != nil:
-		log.Println(err.Error())
-		t.FailNow()
-	default:
-		log.Println(timestamp + " was returned")
-	}
+	c.Check(err, check.IsNil)
+
 	_, err = conn.Exec("/* finish */ commit")
+	c.Check(err, check.IsNil)
 
 	var endTime = time.Since(startTime)
 	log.Printf("Duration %s\n", endTime)

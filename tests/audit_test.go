@@ -16,40 +16,28 @@ package tests
 import (
 	"bytes"
 	"database/sql"
+	"gopkg.in/check.v1"
 	"io/ioutil"
 	"log"
-	"testing"
 	"time"
 )
 
-func TestAudit(t *testing.T) {
+func (s *S) TestAudit(c *check.C) {
 	log.SetFlags(log.Ltime | log.Lmicroseconds)
 	log.Println("TestAudit was called")
 	var startTime = time.Now()
 	conn, err := Connect()
 	defer conn.Close()
-	if err != nil {
-		t.FailNow()
-	}
+	c.Check(err, check.IsNil)
 
 	var timestamp string
 	err = conn.QueryRow("/* read */ select text(now())").Scan(&timestamp)
-	switch {
-	case err == sql.ErrNoRows:
-		log.Println("no rows returned")
-		t.FailNow()
-	case err != nil:
-		log.Println(err.Error())
-		t.FailNow()
-	default:
-		log.Println(timestamp + " was returned")
-	}
+	c.Check(err, check.ErrorMatches, sql.ErrNoRows.Error())
+
+	log.Println(timestamp + " was returned")
 
 	dat, err := ioutil.ReadFile("/tmp/audit.log")
-	if err != nil {
-		log.Println(err.Error())
-		t.FailNow()
-	}
+	c.Check(err, check.IsNil)
 
 	if bytes.Contains(dat, []byte("msg")) {
 		log.Println("audit records were found")
