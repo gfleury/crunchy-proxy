@@ -6,7 +6,7 @@ server:
 
 nodes:
   master:
-    hostport: 127.0.0.1:5433
+    hostport: 172.17.0.4:5432
     role: master
     metadata: {}
   

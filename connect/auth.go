@@ -186,7 +186,7 @@ func AuthenticateClient(client net.Conn, message []byte, length int) (bool, erro
 	messageType := protocol.GetMessageType(message)
 
 	for !protocol.IsAuthenticationOk(message) &&
-		(messageType != protocol.ErrorMessageType) {
+		(messageType != protocol.ErrorResponseMessageType) {
 		Send(client, message[:length])
 		message, length, err = Receive(client)
 
@@ -227,7 +227,7 @@ func AuthenticateClient(client net.Conn, message []byte, length int) (bool, erro
 		return true, nil
 	}
 
-	if protocol.GetMessageType(message) == protocol.ErrorMessageType {
+	if protocol.GetMessageType(message) == protocol.ErrorResponseMessageType {
 		err = protocol.ParseError(message)
 		log.Error("Error occurred on client startup.")
 		log.Errorf("Error: %s", err.Error())

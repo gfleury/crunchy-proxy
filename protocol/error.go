@@ -77,7 +77,7 @@ func (e *Error) Error() string {
 func (e *Error) GetMessage() []byte {
 	msg := NewMessageBuffer([]byte{})
 
-	msg.WriteByte(ErrorMessageType)
+	msg.WriteByte(ErrorResponseMessageType)
 	msg.WriteInt32(0)
 
 	msg.WriteByte(ErrorFieldSeverity)

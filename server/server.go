@@ -39,6 +39,7 @@ func NewServer() *Server {
 	s.proxy = NewProxyServer(s)
 
 	return s
+
 }
 
 func (s *Server) Start() {
@@ -56,7 +57,7 @@ func (s *Server) Start() {
 	// s.waitGroup.Add(1)
 	// go s.admin.Serve(adminListener)
 
-	if err := evio.Serve(s.proxy.events, fmt.Sprintf("tcp://%s", proxyConfig.HostPort)); err != nil {
+	if err := evio.Serve(s.proxy.events, fmt.Sprintf("tcp-net://%s", proxyConfig.HostPort)); err != nil {
 		panic(err.Error())
 	}
 

@@ -16,6 +16,7 @@ package connect
 
 import (
 	"net"
+	"time"
 
 	"github.com/crunchydata/crunchy-proxy/config"
 	"github.com/crunchydata/crunchy-proxy/protocol"
@@ -23,19 +24,34 @@ import (
 )
 
 func Send(connection net.Conn, message []byte) (int, error) {
+	connection.SetWriteDeadline(time.Now().Add(500 * time.Millisecond))
 	return connection.Write(message)
 }
 
 func Read(connection net.Conn, size int) ([]byte, int, error) {
 	buffer := make([]byte, size)
+	connection.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	length, err := connection.Read(buffer)
 	return buffer, length, err
 }
 
 func Receive(connection net.Conn) ([]byte, int, error) {
 	buffer := make([]byte, 4096)
+	connection.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
 	length, err := connection.Read(buffer)
 	return buffer, length, err
+}
+
+func Flush(connection net.Conn) error {
+	var err error
+
+	/* Flushing the remaning data in the connection */
+	for err == nil {
+		buffer := make([]byte, 4096)
+		connection.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
+		_, err = connection.Read(buffer)
+	}
+	return err
 }
 
 func Connect(host string) (net.Conn, error) {

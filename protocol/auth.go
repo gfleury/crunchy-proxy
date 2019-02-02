@@ -18,7 +18,7 @@ func CreatePasswordMessage(password string) []byte {
 	message := NewMessageBuffer([]byte{})
 
 	/* Set the message type */
-	message.WriteByte(PasswordMessageType)
+	message.WriteByte(PasswordMessageMessageType)
 
 	/* Initialize the message length to zero. */
 	message.WriteInt32(0)

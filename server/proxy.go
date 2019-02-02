@@ -15,13 +15,13 @@ limitations under the License.
 package server
 
 import (
-	"fmt"
-	"github.com/crunchydata/crunchy-proxy/connect"
 	"github.com/tidwall/evio"
 	"io"
 	"net"
+	"time"
 
 	"github.com/crunchydata/crunchy-proxy/config"
+	"github.com/crunchydata/crunchy-proxy/connect"
 	"github.com/crunchydata/crunchy-proxy/pool"
 	"github.com/crunchydata/crunchy-proxy/protocol"
 	"github.com/crunchydata/crunchy-proxy/proxy"
@@ -58,12 +58,11 @@ type conn struct {
 
 type poolConnection struct {
 	/* Process the client messages for the life of the connection. */
-	statementBlock bool
-	cp             *pool.Pool // The connection pool in use
-	backend        net.Conn   // The backend connection in use
-	read           bool
-	end            bool
-	nodeName       string
+	transactionBlock bool
+	cp               *pool.Pool // The connection pool in use
+	backend          net.Conn   // The backend connection in use
+	read             bool
+	nodeName         string
 
 	done bool // for message processing loop.
 }
@@ -77,6 +76,8 @@ func NewProxyServer(s *Server) *ProxyServer {
 	proxyServer.events.Serving = proxyServer.Serving
 	proxyServer.events.Opened = proxyServer.Opened
 	proxyServer.events.Closed = proxyServer.Closed
+
+	proxyServer.events.NumLoops = -1
 
 	proxyServer.p = proxy.NewProxy()
 
@@ -121,18 +122,15 @@ func (s *ProxyServer) Stop() {
 func (s *ProxyServer) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 	stayHere := true
 
-	log.Info(fmt.Sprintf("Doing Something For %s", c.RemoteAddr()))
+	log.Debugf("Doing Something For %s", c.RemoteAddr())
 
 	if in == nil {
-		log.Info(fmt.Sprintf("wake from %s", c.RemoteAddr()))
-		//return nil, evio.Close
+		log.Debugf("wake from %s", c.RemoteAddr())
 	}
 
 	pc := c.Context().(*conn)
 	data := pc.is.Begin(in)
-	// var n int
-	// var complete bool
-	// var err error
+
 	for stayHere {
 		switch pc.phase {
 		case INIT:
@@ -162,6 +160,9 @@ func (s *ProxyServer) Data(c evio.Conn, in []byte) (out []byte, action evio.Acti
 				pc.phase = VALIDATECLIENT
 			}
 			break
+		/*
+		 * Try to upgrade connection to TLS, not implemented yet.
+		 */
 		case UPGRADESSL:
 			/* Upgrade the client connection if required. */
 			//client = connect.UpgradeServerConnection(client)
@@ -197,7 +198,6 @@ func (s *ProxyServer) Data(c evio.Conn, in []byte) (out []byte, action evio.Acti
 
 					out = pgError.GetMessage()
 					log.Errorf("Could not validate client %s", c.RemoteAddr())
-					data = []byte{}
 					action = evio.Close
 					break
 				}
@@ -210,14 +210,21 @@ func (s *ProxyServer) Data(c evio.Conn, in []byte) (out []byte, action evio.Acti
 				if err != nil {
 					log.Error("An error occurred connecting to the master node")
 					log.Errorf("Error %s", err.Error())
-					data = []byte{}
 					action = evio.Close
 					break
 				}
 
 				/* Relay the startup message to master node. */
-				log.Infof("client auth: relay startup message to 'master' node")
+				log.Debugf("client auth: relay startup message to 'master' node")
 				_, err = pc.master.Write(data)
+
+				if err != nil {
+					log.Error("An error occurred writing the authentication to master node.")
+					log.Errorf("Error %s", err.Error())
+					action = evio.Close
+					pc.master.Close()
+					break
+				}
 
 				/* Receive startup response. */
 				log.Infof("client auth: receiving startup response from 'master' node")
@@ -226,7 +233,6 @@ func (s *ProxyServer) Data(c evio.Conn, in []byte) (out []byte, action evio.Acti
 				if err != nil {
 					log.Error("An error occurred receiving startup response.")
 					log.Errorf("Error %s", err.Error())
-					data = []byte{}
 					action = evio.Close
 					pc.master.Close()
 					break
@@ -235,8 +241,8 @@ func (s *ProxyServer) Data(c evio.Conn, in []byte) (out []byte, action evio.Acti
 				messageType := protocol.GetMessageType(message)
 
 				if protocol.IsAuthenticationOk(message) &&
-					(messageType != protocol.ErrorMessageType) {
-					log.Infof("client auth: checking authentication response")
+					(messageType != protocol.ErrorResponseMessageType) {
+					log.Debugf("client auth: checking authentication response")
 					termMsg := protocol.GetTerminateMessage()
 					connect.Send(pc.master, termMsg)
 					pc.phase = AUTHENTICATED
@@ -248,8 +254,7 @@ func (s *ProxyServer) Data(c evio.Conn, in []byte) (out []byte, action evio.Acti
 				_, err := connect.Send(pc.master, data)
 
 				if (err != nil) && (err == io.EOF) {
-					log.Info("The master closed the connection.")
-					data = []byte{}
+					log.Errorf("The master closed the connection.")
 					action = evio.Close
 					break
 				}
@@ -257,33 +262,40 @@ func (s *ProxyServer) Data(c evio.Conn, in []byte) (out []byte, action evio.Acti
 				message, length, err := connect.Receive(pc.master)
 
 				if (err != nil) && (err == io.EOF) {
-					log.Info("The master closed the connection.")
-					log.Info("If the client is 'psql' and the authentication method " +
+					log.Errorf("The master closed the connection.")
+					log.Errorf("If the client is 'psql' and the authentication method " +
 						"was 'password', then this behavior is expected.")
-					data = []byte{}
 					action = evio.Close
 					break
 				}
 
 				if protocol.IsAuthenticationOk(message) {
-					log.Info("client auth: checking authentication response")
+					log.Debugf("client auth: checking authentication response")
 					termMsg := protocol.GetTerminateMessage()
 					connect.Send(pc.master, termMsg)
 					pc.phase = AUTHENTICATED
 					log.Infof("Client: %s - authentication successful", c.RemoteAddr())
-				} else if protocol.GetMessageType(data) == protocol.ErrorMessageType {
+				} else if protocol.GetMessageType(data) == protocol.ErrorResponseMessageType {
 					err := protocol.ParseError(data)
 					log.Error("Error occurred on client startup.")
 					log.Errorf("Error: %s", err.Error())
-				} else if protocol.GetMessageType(data) == protocol.PasswordMessageType {
+					action = evio.Close
+				} else if protocol.GetMessageType(data) == protocol.PasswordMessageMessageType {
 					log.Error("Authentication with master failed.")
+					action = evio.Close
 				} else {
 					log.Error("Unknown error occurred on client startup.")
+					action = evio.Close
 				}
 
 				out = message[:length]
 				data = []byte{}
+
+				/* Defer close master authentication connection */
+				defer pc.master.Close()
+				pc.master = nil
 			}
+
 		case AUTHENTICATED:
 			stayHere = false
 
@@ -297,7 +309,6 @@ func (s *ProxyServer) Data(c evio.Conn, in []byte) (out []byte, action evio.Acti
 				 */
 				if messageType == protocol.TerminateMessageType {
 					log.Infof("Client: %s - disconnected", c.RemoteAddr())
-					data = []byte{}
 					action = evio.Close
 					break
 				} else if messageType == protocol.QueryMessageType && pc.actualConnection == nil {
@@ -306,20 +317,20 @@ func (s *ProxyServer) Data(c evio.Conn, in []byte) (out []byte, action evio.Acti
 
 					annotations := getAnnotations(data)
 
-					if annotations[StartAnnotation] {
-						pc.actualConnection.statementBlock = true
-					} else if annotations[EndAnnotation] {
-						pc.actualConnection.end = true
-						pc.actualConnection.statementBlock = false
-					}
+					// if annotations[StartAnnotation] {
+					// 	pc.actualConnection.transactionBlock = true
+					// } else if annotations[EndAnnotation] {
+					// 	pc.actualConnection.transactionBlock = false
+					// }
 
+					pc.actualConnection.transactionBlock = false
 					pc.actualConnection.read = annotations[ReadAnnotation]
 
 					/*
 					 * If not in a statement block or if the pool or backend are not already
 					 * set, then fetch a new backend to receive the message.
 					 */
-					if !pc.actualConnection.statementBlock && !pc.actualConnection.end || pc.actualConnection.cp == nil || pc.actualConnection.backend == nil {
+					if !pc.actualConnection.transactionBlock || pc.actualConnection.cp == nil || pc.actualConnection.backend == nil {
 						pc.actualConnection.cp = s.p.GetPool(pc.actualConnection.read)
 						pc.actualConnection.backend = pc.actualConnection.cp.Next()
 						pc.actualConnection.nodeName = pc.actualConnection.cp.Name
@@ -328,74 +339,91 @@ func (s *ProxyServer) Data(c evio.Conn, in []byte) (out []byte, action evio.Acti
 
 					/* Update the query count for the node being used. */
 					// s.p.lock.Lock()
-					s.p.Stats[pc.actualConnection.nodeName] += 1
+					//s.p.Stats[pc.actualConnection.nodeName] += 1
 					// s.p.lock.Unlock()
 
 				}
 				/* Relay message to client and backend */
 				if _, err := connect.Send(pc.actualConnection.backend, data); err != nil {
-					log.Infof("Error sending message to backend %s", pc.actualConnection.backend.RemoteAddr())
-					log.Infof("Error: %s", err.Error())
-				}
-			}
-			/*
-			 * Continue to read from the backend until a 'ReadyForQuery' message is
-			 * is found.
-			 */
-
-			message, length, err := connect.Receive(pc.actualConnection.backend)
-			if err != nil {
-				log.Debugf("Error receiving response from backend %s", pc.actualConnection.backend.RemoteAddr())
-				log.Debugf("Error: %s", err.Error())
-				pc.actualConnection.done = true
-			}
-
-			messageType := protocol.GetMessageType(message[:length])
-			// totalSize := 0
-			/*
-			 * Examine all of the messages in the buffer and determine if any of
-			 * them are a ReadyForQuery message.
-			 */
-			for start := 0; start < length; {
-				messageType = protocol.GetMessageType(message[start:])
-				if start+5 >= length {
-					newMessage, newLength, err := connect.Read(pc.actualConnection.backend, (start+5)-length)
-					if err != nil {
-						log.Debugf("Error receiving response from backend %s", pc.actualConnection.backend.RemoteAddr())
-						log.Debugf("Error: %s", err.Error())
-						pc.actualConnection.done = true
-					}
-					message = append(message, newMessage...)
-					length += newLength
-				}
-				messageLength := protocol.GetMessageLength(message[start:])
-				if messageLength > 30000 && VALID_LONG_MESSAGE_TYPE(messageType) {
-					pc.phase = READINGLONGMESSAGE
-					pc.longMessageRemaingBytes = messageLength
+					log.Errorf("Error sending message to backend %s", pc.actualConnection.backend.RemoteAddr())
+					log.Errorf("Error: %s", err.Error())
+					pc.ReleaseBackend()
+					action = evio.Close
 					break
-				} else if start+int(messageLength) >= length {
-					newMessage, newLength, err := connect.Read(pc.actualConnection.backend, (start+int(messageLength)+1)-length)
-					if err != nil {
-						log.Debugf("Error receiving response from backend %s", pc.actualConnection.backend.RemoteAddr())
-						log.Debugf("Error: %s", err.Error())
-						pc.actualConnection.done = true
-					}
-					message = append(message, newMessage...)
-					length += newLength
 				}
-				/*
-				 * Calculate the next start position, add '1' to the message
-				 * length to account for the message type.
-				 */
-				start = (start + int(messageLength) + 1)
-				// totalSize += int(messageLength) + 1
-				// fmt.Printf("\nType: %d\n", messageType)
-				// fmt.Printf("MessageLength: %d\n", int(messageLength))
-				// fmt.Printf("RealMessageLength: %d\n", len(message))
-				// fmt.Printf("TotalSize: %d\n", totalSize)
-				// fmt.Printf("Start: %d\n", start)
-				// fmt.Printf("Length: %d\n", length)
 			}
+
+			/*
+			 * Read first 5 bytes
+			 * 1   - MessageType
+			 * 2-5 - MessageLength
+			 */
+			message, length, err := connect.Read(pc.actualConnection.backend, 5)
+			for err == nil && length < 5 {
+				var restPiece []byte
+				var newLength int
+				restPiece, newLength, err = connect.Read(pc.actualConnection.backend, 5-length)
+				message = append(message, restPiece...)
+				length += newLength
+			}
+			if err != nil {
+				log.Errorf("Error receiving response from backend %s", pc.actualConnection.backend.RemoteAddr())
+				log.Errorf("Length: %d, %s", length, err.Error())
+				pc.ReleaseBackend()
+				action = evio.Close
+				break
+			}
+
+			/*
+			 * Handle the message by first getting the Message Type
+			 */
+			messageType := protocol.GetMessageType(message[:length])
+			messageLength := protocol.GetMessageLength(message[:length])
+
+			/* Validate if message is a valid backed message. If not handle sync loss */
+			if !protocol.ValidBackendMessage(messageType) {
+				log.Errorf("Not a valid backend message type, lost synchronization with server: got message type \"%c\", length %d",
+					messageType, messageLength)
+				pc.ReleaseBackend()
+				action = evio.Close
+				break
+			}
+
+			/* Validate Big Message and handle it properly */
+			if messageLength > 30000 && protocol.ValidLongMessage(messageType) {
+				pc.phase = READINGLONGMESSAGE
+				pc.longMessageRemaingBytes = messageLength
+			} else if messageLength > 30000 && !protocol.ValidLongMessage(messageType) {
+				log.Errorf("Message too big for his kind, lost synchronization with server: got message type \"%c\", length %d",
+					messageType, messageLength)
+				pc.ReleaseBackend()
+				action = evio.Close
+				break
+			} else {
+				/* Handle normal sized messages and weird sized (non expected to be big) */
+				var messageBody []byte
+				bodyLength := 0
+				for length < int(messageLength)+1 {
+					messageBody, bodyLength, err = connect.Read(pc.actualConnection.backend, (int(messageLength)+1)-length)
+					if err != nil {
+						log.Errorf("Error receiving response from backend %s", pc.actualConnection.backend.RemoteAddr())
+						log.Errorf("Error: %s", err.Error())
+						pc.ReleaseBackend()
+						action = evio.Close
+						return
+					}
+					message = append(message, messageBody...)
+					length += bodyLength
+				}
+				if length != int(messageLength)+1 {
+					log.Errorf("Error receiving response from backend %s, different sizes of msgSize %d and expect %d", pc.actualConnection.backend.RemoteAddr(), length, messageLength+1)
+					pc.ReleaseBackend()
+					action = evio.Close
+					return
+				}
+			}
+
+			log.Debugf("Client: %s MSG type=%c length=%d readLength=%d", c.RemoteAddr(), messageType, messageLength, length)
 
 			out = message[:length]
 
@@ -407,15 +435,18 @@ func (s *ProxyServer) Data(c evio.Conn, in []byte) (out []byte, action evio.Acti
 				go c.Wake()
 			}
 			data = []byte{}
+
 		case READINGLONGMESSAGE:
 			stayHere = false
 			log.Debugf("Client: reading long messaging from %s, remaining bytes %d", pc.actualConnection.backend.RemoteAddr(), pc.longMessageRemaingBytes)
 
 			message, length, err := connect.Receive(pc.actualConnection.backend)
 			if err != nil {
-				log.Debugf("Error receiving response from backend %s", pc.actualConnection.backend.RemoteAddr())
-				log.Debugf("Error: %s", err.Error())
-				pc.phase = RELEASEBACKEND
+				log.Errorf("Error receiving response from backend %s", pc.actualConnection.backend.RemoteAddr())
+				log.Errorf("Error: %s", err.Error())
+				pc.ReleaseBackend()
+				action = evio.Close
+				break
 			}
 
 			out = message[:length]
@@ -425,55 +456,59 @@ func (s *ProxyServer) Data(c evio.Conn, in []byte) (out []byte, action evio.Acti
 				pc.phase = AUTHENTICATED
 			}
 			go c.Wake()
+
 		case RELEASEBACKEND:
 			stayHere = false
 			pc.phase = AUTHENTICATED
-			/*
-			 * If at the end of a statement block or not part of statment block,
-			 * then return the connection to the pool.
-			 */
-			if !pc.actualConnection.statementBlock {
-				/*
-				 * Toggle 'end' such that a new connection will be fetched on the
-				 * next query.
-				 */
-				if pc.actualConnection.end {
-					pc.actualConnection.end = false
-				}
-
-				/* Return the backend to the pool it belongs to. */
-				log.Infof("Client: Releasing pool to client %s", c.RemoteAddr())
-				pc.actualConnection.cp.Return(pc.actualConnection.backend)
-				pc.actualConnection = nil
-			}
+			pc.ReleaseBackend()
 		}
 	}
 	pc.is.End(data)
 
-	log.Infof("Client: Leaving something %s", c.RemoteAddr())
+	log.Debugf("Client: Leaving something %s", c.RemoteAddr())
 	return
 }
 
 func (s *ProxyServer) Serving(srv evio.Server) (action evio.Action) {
-	log.Info(fmt.Sprintf("Proxy server started on %s (loops: %d)", srv.Addrs[0].String(), srv.NumLoops))
+	log.Infof("Proxy server started on %s (loops: %d)", srv.Addrs[0].String(), srv.NumLoops)
 
 	return
 }
 
 func (s *ProxyServer) Opened(c evio.Conn) (out []byte, opts evio.Options, action evio.Action) {
-	log.Info(fmt.Sprintf("opened: %v", c.RemoteAddr()))
+	log.Infof("opened: %v", c.RemoteAddr())
 	c.SetContext(&conn{
 		phase:                   INIT,
 		longMessageRemaingBytes: 0,
+		addr:                    c.RemoteAddr().String(),
 	})
+
+	opts.TCPKeepAlive = 20 * time.Second
+
 	return
 }
 
 func (s *ProxyServer) Closed(c evio.Conn, err error) (action evio.Action) {
-	log.Info(fmt.Sprintf("closed: %v", c.RemoteAddr()))
+	log.Infof("closed: %v", c.RemoteAddr())
 	return
 }
 
-func VALID_LONG_MESSAGE_TYPE(id byte) bool {
-	return ((id) == 'T' || (id) == 'D' || (id) == 'd' || (id) == 'V' || (id) == 'E' || (id) == 'N' || (id) == 'A')
+func (pc *conn) ReleaseBackend() {
+	/*
+	 * If at the end of a statement block or not part of statment block,
+	 * then return the connection to the pool.
+	 */
+	if !pc.actualConnection.transactionBlock {
+		var err error
+
+		/* Flushing the remaning data in the connection */
+		for err == nil {
+			err = connect.Flush(pc.actualConnection.backend)
+		}
+
+		/* Return the backend to the pool it belongs to. */
+		log.Infof("Client: Releasing pool to client %s", pc.addr)
+		pc.actualConnection.cp.Return(pc.actualConnection.backend)
+		pc.actualConnection = nil
+	}
 }
