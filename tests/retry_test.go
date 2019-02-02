@@ -58,7 +58,7 @@ func (s *S) TestRetry(c *check.C) {
 	var timestamp string
 	log.Println("performing a read query with replica down but with hc showing up")
 	err = conn.QueryRow("/* read */ select text(now())").Scan(&timestamp)
-	c.Check(err, check.ErrorMatches, sql.ErrNoRows.Error())
+	c.Check(err, check.IsNil)
 
 	var endTime = time.Since(startTime)
 

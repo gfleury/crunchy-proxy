@@ -14,10 +14,9 @@ limitations under the License.
 package tests
 
 import (
-	"bytes"
-	"database/sql"
+	// "bytes"
 	"gopkg.in/check.v1"
-	"io/ioutil"
+	// "io/ioutil"
 	"log"
 	"time"
 )
@@ -32,18 +31,18 @@ func (s *S) TestAudit(c *check.C) {
 
 	var timestamp string
 	err = conn.QueryRow("/* read */ select text(now())").Scan(&timestamp)
-	c.Check(err, check.ErrorMatches, sql.ErrNoRows.Error())
+	c.Check(err, check.IsNil)
 
 	log.Println(timestamp + " was returned")
 
-	dat, err := ioutil.ReadFile("/tmp/audit.log")
-	c.Check(err, check.IsNil)
+	// // dat, err := ioutil.ReadFile("/tmp/audit.log")
+	// // c.Check(err, check.IsNil)
 
-	if bytes.Contains(dat, []byte("msg")) {
-		log.Println("audit records were found")
-	} else {
-		log.Println("audit records were not found")
-	}
+	// if bytes.Contains(dat, []byte("msg")) {
+	// 	log.Println("audit records were found")
+	// } else {
+	// 	log.Println("audit records were not found")
+	// }
 
 	var endTime = time.Since(startTime)
 	log.Printf("Duration %s\n", endTime)

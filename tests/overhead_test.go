@@ -40,14 +40,14 @@ func (s *S) TestOverhead(c *check.C) {
 	var timestamp string
 	var proxyStartTime = time.Now()
 	err = proxyconn.QueryRow("select now()").Scan(&timestamp)
-	c.Check(err, check.ErrorMatches, sql.ErrNoRows.Error())
+	c.Check(err, check.IsNil)
 
 	proxyDuration := time.Since(proxyStartTime)
 	log.Printf("Proxy Duration (no annotation) %s\n", proxyDuration)
 
 	noProxyStartTime := time.Now()
 	err = conn.QueryRow("select now()").Scan(&timestamp)
-	c.Check(err, check.ErrorMatches, sql.ErrNoRows.Error())
+	c.Check(err, check.IsNil)
 
 	noProxyDuration := time.Since(noProxyStartTime)
 	log.Printf("No Proxy Duration (no annotation) %s\n", noProxyDuration)
@@ -55,7 +55,7 @@ func (s *S) TestOverhead(c *check.C) {
 	log.Printf("Proxy Overhead (no annotation) %s\n", proxyDuration-noProxyDuration)
 	proxyStartTime = time.Now()
 	err = proxyconn.QueryRow("/* read */select now()").Scan(&timestamp)
-	c.Check(err, check.ErrorMatches, sql.ErrNoRows.Error())
+	c.Check(err, check.IsNil)
 
 	log.Println("")
 	log.Println("Overhead (annotation is supplied)")
@@ -66,7 +66,7 @@ func (s *S) TestOverhead(c *check.C) {
 
 	noProxyStartTime = time.Now()
 	err = conn.QueryRow("/* read */select now()").Scan(&timestamp)
-	c.Check(err, check.ErrorMatches, sql.ErrNoRows.Error())
+	c.Check(err, check.IsNil)
 
 	noProxyDuration = time.Since(noProxyStartTime)
 	log.Printf("No Proxy Duration (annotation) %s\n", noProxyDuration)

@@ -34,7 +34,7 @@ func (s *S) SetUpSuite(c *check.C) {
 	flag.StringVar(&rows, "rows", "onerow", "onerow or tworows")
 	flag.StringVar(&HostPort, "hostport", "localhost:5433", "host:port")
 	flag.StringVar(&userid, "userid", "postgres", "postgres userid")
-	flag.StringVar(&password, "password", "password", "postgres password")
+	flag.StringVar(&password, "password", "mysecretpassword", "postgres password")
 	flag.StringVar(&database, "database", "postgres", "database")
 	flag.Parse()
 }
