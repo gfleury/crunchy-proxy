@@ -24,20 +24,31 @@ import (
 )
 
 func Send(connection net.Conn, message []byte) (int, error) {
-	connection.SetWriteDeadline(time.Now().Add(500 * time.Millisecond))
+	connection.SetWriteDeadline(time.Now().Add(5000 * time.Millisecond))
 	return connection.Write(message)
 }
 
 func Read(connection net.Conn, size int) ([]byte, int, error) {
 	buffer := make([]byte, size)
-	connection.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	connection.SetReadDeadline(time.Now().Add(2500 * time.Millisecond))
 	length, err := connection.Read(buffer)
 	return buffer, length, err
 }
 
+/*
+ * We try to send at least 8K at a time, which is the usual size of pipe
+ * buffers on Unix systems.  That way, when we are sending a large amount
+ * of data, we avoid incurring extra kernel context swaps for partial
+ * bufferloads.  The output buffer is initially made 16K in size, and we
+ * try to dump it after accumulating 8K.
+ *
+ * With the same goal of minimizing context swaps, the input buffer will
+ * be enlarged anytime it has less than 8K free, so we initially allocate
+ * twice that.
+ */
 func Receive(connection net.Conn) ([]byte, int, error) {
-	buffer := make([]byte, 4096)
-	connection.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	buffer := make([]byte, 8*1024)
+	connection.SetReadDeadline(time.Now().Add(2500 * time.Millisecond))
 	length, err := connection.Read(buffer)
 	return buffer, length, err
 }
@@ -47,8 +58,8 @@ func Flush(connection net.Conn) error {
 
 	/* Flushing the remaning data in the connection */
 	for err == nil {
-		buffer := make([]byte, 4096)
-		connection.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
+		buffer := make([]byte, 8*1024)
+		connection.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 		_, err = connection.Read(buffer)
 	}
 	return err

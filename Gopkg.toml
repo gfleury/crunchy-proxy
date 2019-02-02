@@ -34,6 +34,10 @@ ignored = ["scripts"]
   name = "google.golang.org/grpc"
   version = "=1.4.0"
 
+[[constraint]]
+  name = "github.com/tidwall/evio"
+  revision = "b353be3a765785dafabbb63a7b25aadec3533946"
+
 [prune]
   go-tests = true
   unused-packages = true

@@ -15,8 +15,7 @@ limitations under the License.
 package server
 
 import (
-	"fmt"
-	"github.com/tidwall/evio"
+	"net"
 	"sync"
 
 	"github.com/crunchydata/crunchy-proxy/config"
@@ -44,20 +43,20 @@ func NewServer() *Server {
 
 func (s *Server) Start() {
 	proxyConfig := config.GetProxyConfig()
-	//adminConfig := config.GetAdminConfig()
+	adminConfig := config.GetAdminConfig()
 
 	log.Info("Admin Server Starting...")
 
-	// adminListener, err := net.Listen("tcp", adminConfig.HostPort)
+	adminListener, err := net.Listen("tcp", adminConfig.HostPort)
 
-	// if err != nil {
-	// 	log.Error(err.Error())
-	// }
+	if err != nil {
+		log.Error(err.Error())
+	}
 
-	// s.waitGroup.Add(1)
-	// go s.admin.Serve(adminListener)
+	s.waitGroup.Add(1)
+	go s.admin.Serve(adminListener)
 
-	if err := evio.Serve(s.proxy.events, fmt.Sprintf("tcp-net://%s", proxyConfig.HostPort)); err != nil {
+	if err := s.proxy.p.Serve(proxyConfig.HostPort); err != nil {
 		panic(err.Error())
 	}
 
