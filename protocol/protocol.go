@@ -135,13 +135,12 @@ const (
 	AuthenticationSSPI        int32 = 9
 )
 
-func GetVersion(message []byte) int32 {
+func GetVersion(message []byte) (int32, error) {
 	var code int32
 
 	reader := bytes.NewReader(message[4:8])
-	binary.Read(reader, binary.BigEndian, &code)
-
-	return code
+	err := binary.Read(reader, binary.BigEndian, &code)
+	return code, err
 }
 
 /*
@@ -158,13 +157,13 @@ func GetMessageType(message []byte) byte {
  *
  * message - the message
  */
-func GetMessageLength(message []byte) int32 {
+func GetMessageLength(message []byte) (int32, error) {
 	var messageLength int32
 
 	reader := bytes.NewReader(message[1:5])
-	binary.Read(reader, binary.BigEndian, &messageLength)
+	err := binary.Read(reader, binary.BigEndian, &messageLength)
 
-	return messageLength
+	return messageLength, err
 }
 
 /* IsAuthenticationOk
@@ -184,11 +183,17 @@ func IsAuthenticationOk(message []byte) bool {
 	var messageValue int32
 
 	// Get the message length.
-	messageLength := GetMessageLength(message)
+	messageLength, err := GetMessageLength(message)
+	if err != nil {
+		return false
+	}
 
 	// Get the message value.
 	reader := bytes.NewReader(message[5:9])
-	binary.Read(reader, binary.BigEndian, &messageValue)
+	err = binary.Read(reader, binary.BigEndian, &messageValue)
+	if err != nil {
+		return false
+	}
 
 	return (messageLength == 8 && messageValue == AuthenticationOk)
 }

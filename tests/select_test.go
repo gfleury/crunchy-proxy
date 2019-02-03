@@ -24,8 +24,8 @@ func (s *S) TestSelect(c *check.C) {
 	log.Println("TestSelect was called")
 	var startTime = time.Now()
 	conn, err := Connect()
-	defer conn.Close()
 	c.Check(err, check.IsNil)
+	defer conn.Close()
 
 	var timestamp string
 	err = conn.QueryRow("/* read */ select text(now())").Scan(&timestamp)

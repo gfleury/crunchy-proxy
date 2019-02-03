@@ -17,7 +17,6 @@ package proxy
 import (
 	"fmt"
 	"io"
-	"net"
 	"sync"
 	"time"
 
@@ -45,8 +44,6 @@ const (
 type Proxy struct {
 	writePools chan *pool.Pool
 	readPools  chan *pool.Pool
-	master     common.Node
-	clients    []net.Conn
 	stats      map[string]int32
 	lock       *sync.Mutex
 	events     evio.Events
@@ -103,12 +100,24 @@ func (p *Proxy) setupPools() {
 			database := config.GetString("credentials.database")
 			options := config.GetStringMapString("credentials.options")
 
-			startupMessage := protocol.CreateStartupMessage(username, database, options)
+			startupMessage, err := protocol.CreateStartupMessage(username, database, options)
+			if err != nil {
+				log.Errorf("Unable to generate startup message to node %s", name)
+				log.Fatal(err.Error())
+			}
 
-			connection.Write(startupMessage)
+			_, err = connection.Write(startupMessage)
+			if err != nil {
+				log.Errorf("Unable to write startup message to node %s", name)
+				log.Fatal(err.Error())
+			}
 
 			response := make([]byte, 4096)
-			connection.Read(response)
+			_, err = connection.Read(response)
+			if err != nil {
+				log.Errorf("Unable to read startup response from node %s", name)
+				log.Fatal(err.Error())
+			}
 
 			authenticated := connect.HandleAuthenticationRequest(connection, response)
 
@@ -170,7 +179,12 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 		switch client.phase {
 		case INIT:
 			/* Get the protocol from the startup message.*/
-			version := protocol.GetVersion(clientMessage)
+			version, err := protocol.GetVersion(clientMessage)
+			if err != nil {
+				log.Errorf("Could not read protocol version from %s", c.RemoteAddr())
+				action = evio.Close
+				break
+			}
 
 			/* Handle the case where the startup message was an SSL request. */
 			if version == protocol.SSLRequestCode {
@@ -179,11 +193,15 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 				/* Determine which SSL response to send to client. */
 				creds := config.GetCredentials()
 				if creds.SSL.Enable {
-					sslResponse.WriteByte(protocol.SSLAllowed)
+					err = sslResponse.WriteByte(protocol.SSLAllowed)
 				} else {
-					sslResponse.WriteByte(protocol.SSLNotAllowed)
+					err = sslResponse.WriteByte(protocol.SSLNotAllowed)
 				}
-
+				if err != nil {
+					log.Errorf("Could not write SSL response to %s", c.RemoteAddr())
+					action = evio.Close
+					break
+				}
 				/*
 				 * Send the SSL response back to the client and wait for it to send the
 				 * regular startup packet.
@@ -194,7 +212,7 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 			} else {
 				client.phase = VALIDATECLIENT
 			}
-			break
+
 		/*
 		 * Try to upgrade connection to TLS, not implemented yet.
 		 */
@@ -203,7 +221,6 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 			//client = connect.UpgradeServerConnection(client)
 			client.phase = VALIDATECLIENT
 			//data = []byte{}
-			break
 
 		/*
 		 * Validate that the client username and database are the same as that
@@ -279,7 +296,10 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 					(messageType != protocol.ErrorResponseMessageType) {
 					log.Debugf("client auth: checking authentication response")
 					termMsg := protocol.GetTerminateMessage()
-					connect.Send(client.masterConnection, termMsg)
+					_, err = connect.Send(client.masterConnection, termMsg)
+					if err != nil {
+						log.Errorf("Failed to write to master termination message to %s, doesn't matter right now, continuing anyway.", client.masterConnection.RemoteAddr())
+					}
 					client.phase = AUTHENTICATED
 				}
 				out = message[:length]
@@ -307,7 +327,10 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 				if protocol.IsAuthenticationOk(message) {
 					log.Debugf("client auth: checking authentication response")
 					termMsg := protocol.GetTerminateMessage()
-					connect.Send(client.masterConnection, termMsg)
+					_, err = connect.Send(client.masterConnection, termMsg)
+					if err != nil {
+						log.Errorf("Failed to write to master termination message to %s, doesn't matter right now, continuing anyway.", client.masterConnection.RemoteAddr())
+					}
 					client.phase = AUTHENTICATED
 					log.Infof("Client: %s - authentication successful", c.RemoteAddr())
 				} else if protocol.GetMessageType(clientMessage) == protocol.ErrorResponseMessageType {
@@ -354,8 +377,12 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 						messageMissingBytes: 0,
 					}
 
-					annotations := getAnnotations(clientMessage)
-
+					annotations, err := getAnnotations(clientMessage)
+					if err != nil {
+						log.Errorf("Failed to get annotations from connection %s: %s", c.RemoteAddr(), err.Error())
+						action = evio.Close
+						break
+					}
 					// if annotations[StartAnnotation] {
 					// 	client.poolConnection.transactionBlock = true
 					// } else if annotations[EndAnnotation] {
@@ -433,7 +460,13 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 					message = append(message, piecedMessage...)
 					length += newLength
 				}
-				messageLength = protocol.GetMessageLength(message[start:])
+				messageLength, err = protocol.GetMessageLength(message[start:])
+				if err != nil {
+					log.Errorf("Error unable to get message length from backend %s", client.poolConnection.backend.RemoteAddr())
+					client.ReleaseBackend()
+					action = evio.Close
+					break
+				}
 
 				if !protocol.ValidBackendMessage(messageType) {
 					log.Errorf("Not a valid backend message type, lost synchronization with server: got message type \"%c\", length %d",

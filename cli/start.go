@@ -47,16 +47,16 @@ func init() {
 
 func runStart(cmd *cobra.Command, args []string) error {
 	if background {
-		args = make([]string, 0, len(os.Args))
+		newArgs := make([]string, 0, len(os.Args))
 
 		for _, arg := range os.Args {
 			if strings.HasPrefix(arg, "--background") {
 				continue
 			}
-			args = append(args, arg)
+			newArgs = append(newArgs, arg)
 		}
 
-		cmd := exec.Command(args[0], args[1:]...)
+		cmd := exec.Command(newArgs[0], newArgs[1:]...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 

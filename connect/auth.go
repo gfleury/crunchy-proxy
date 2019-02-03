@@ -39,11 +39,19 @@ func HandleAuthenticationRequest(connection net.Conn, message []byte) bool {
 
 	// Read message length.
 	reader := bytes.NewReader(message[1:5])
-	binary.Read(reader, binary.BigEndian, &msgLength)
+	err := binary.Read(reader, binary.BigEndian, &msgLength)
+	if err != nil {
+		log.Error(err.Error())
+		return false
+	}
 
 	// Read authentication type.
 	reader.Reset(message[5:9])
-	binary.Read(reader, binary.BigEndian, &authType)
+	err = binary.Read(reader, binary.BigEndian, &authType)
+	if err != nil {
+		log.Error(err.Error())
+		return false
+	}
 
 	switch authType {
 	case protocol.AuthenticationKerberosV5:
@@ -169,6 +177,12 @@ func AuthenticateClient(client net.Conn, message []byte, length int) (bool, erro
 	log.Debug("client auth: relay startup message to 'master' node")
 	_, err = master.Write(message[:length])
 
+	if err != nil {
+		log.Error("An error occurred realying startup response to master node.")
+		log.Errorf("Error %s", err.Error())
+		return false, err
+	}
+
 	/* Receive startup response. */
 	log.Debug("client auth: receiving startup response from 'master' node")
 	message, length, err = Receive(master)
@@ -187,7 +201,12 @@ func AuthenticateClient(client net.Conn, message []byte, length int) (bool, erro
 
 	for !protocol.IsAuthenticationOk(message) &&
 		(messageType != protocol.ErrorResponseMessageType) {
-		Send(client, message[:length])
+		_, err = Send(client, message[:length])
+		if err != nil {
+			log.Error("An error occurred sending startup response.")
+			log.Errorf("Error %s", err.Error())
+			return false, err
+		}
 		message, length, err = Receive(client)
 
 		/*
@@ -207,9 +226,19 @@ func AuthenticateClient(client net.Conn, message []byte, length int) (bool, erro
 			return false, err
 		}
 
-		Send(master, message[:length])
+		_, err = Send(master, message[:length])
+		if err != nil {
+			log.Error("An error occurred sending startup response to master.")
+			log.Errorf("Error %s", err.Error())
+			return false, err
+		}
 
 		message, length, err = Receive(master)
+		if err != nil {
+			log.Error("An error occurred Reading startup response from master.")
+			log.Errorf("Error %s", err.Error())
+			return false, err
+		}
 
 		messageType = protocol.GetMessageType(message)
 	}
@@ -219,11 +248,21 @@ func AuthenticateClient(client net.Conn, message []byte, length int) (bool, erro
 	 * terminate the connection and return 'true' for a successful
 	 * authentication of the client.
 	 */
-	log.Debug("client auth: checking authentication repsonse")
+	log.Debug("client auth: checking authentication response")
 	if protocol.IsAuthenticationOk(message) {
 		termMsg := protocol.GetTerminateMessage()
-		Send(master, termMsg)
-		Send(client, message[:length])
+		_, err = Send(master, termMsg)
+		if err != nil {
+			log.Error("An error occurred sending authentication response to master.")
+			log.Errorf("Error %s", err.Error())
+			return false, err
+		}
+		_, err = Send(client, message[:length])
+		if err != nil {
+			log.Error("An error occurred sending authentication response to client.")
+			log.Errorf("Error %s", err.Error())
+			return false, err
+		}
 		return true, nil
 	}
 
@@ -235,7 +274,7 @@ func AuthenticateClient(client net.Conn, message []byte, length int) (bool, erro
 		log.Error("Unknown error occurred on client startup.")
 	}
 
-	Send(client, message[:length])
+	_, err = Send(client, message[:length])
 
 	return false, err
 }
@@ -262,6 +301,11 @@ func ValidateClient(message []byte) bool {
 			clientUser, err = startup.ReadString()
 		case "database":
 			clientDatabase, err = startup.ReadString()
+		}
+		if err != nil {
+			log.Error("An error occurred validating the client.")
+			log.Errorf("Error %s", err.Error())
+			return false
 		}
 	}
 

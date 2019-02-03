@@ -18,13 +18,22 @@ func CreatePasswordMessage(password string) []byte {
 	message := NewMessageBuffer([]byte{})
 
 	/* Set the message type */
-	message.WriteByte(PasswordMessageMessageType)
+	err := message.WriteByte(PasswordMessageMessageType)
+	if err != nil {
+		return nil
+	}
 
 	/* Initialize the message length to zero. */
-	message.WriteInt32(0)
+	_, err = message.WriteInt32(0)
+	if err != nil {
+		return nil
+	}
 
 	/* Add the password to the message. */
-	message.WriteString(password)
+	_, err = message.WriteString(password)
+	if err != nil {
+		return nil
+	}
 
 	/* Update the message length */
 	message.ResetLength(PGMessageLengthOffset)

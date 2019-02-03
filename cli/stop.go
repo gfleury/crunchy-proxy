@@ -16,6 +16,7 @@ package cli
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/net/context"
@@ -56,7 +57,12 @@ func runStop(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	client.Shutdown(ctx, &pb.ShutdownRequest{})
+	_, err = client.Shutdown(ctx, &pb.ShutdownRequest{})
+
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
 	conn.Close()
 
 	return nil

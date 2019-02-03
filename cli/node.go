@@ -31,7 +31,7 @@ var nodeCmd = &cobra.Command{
 	RunE:  runNode,
 }
 
-var nodeListCmd = &cobra.Command{}
+// var nodeListCmd = &cobra.Command{}
 
 func init() {
 	flags := nodeCmd.Flags()

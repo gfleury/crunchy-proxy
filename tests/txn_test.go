@@ -24,11 +24,12 @@ func (s *S) TestTxn(c *check.C) {
 	log.Println("TestTxn was called")
 	var startTime = time.Now()
 	conn, err := Connect()
-	defer conn.Close()
 	c.Check(err, check.IsNil)
+	defer conn.Close()
 
 	var timestamp string
 	_, err = conn.Exec("/* start */ begin")
+	c.Check(err, check.IsNil)
 	err = conn.QueryRow("/* read */ select text(now())").Scan(&timestamp)
 	c.Check(err, check.IsNil)
 

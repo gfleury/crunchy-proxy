@@ -24,13 +24,19 @@ import (
 )
 
 func Send(connection net.Conn, message []byte) (int, error) {
-	connection.SetWriteDeadline(time.Now().Add(5000 * time.Millisecond))
+	err := connection.SetWriteDeadline(time.Now().Add(5000 * time.Millisecond))
+	if err != nil {
+		return 0, err
+	}
 	return connection.Write(message)
 }
 
 func Read(connection net.Conn, size int) ([]byte, int, error) {
 	buffer := make([]byte, size)
-	connection.SetReadDeadline(time.Now().Add(2500 * time.Millisecond))
+	err := connection.SetReadDeadline(time.Now().Add(2500 * time.Millisecond))
+	if err != nil {
+		return buffer, 0, err
+	}
 	length, err := connection.Read(buffer)
 	return buffer, length, err
 }
@@ -48,7 +54,10 @@ func Read(connection net.Conn, size int) ([]byte, int, error) {
  */
 func Receive(connection net.Conn) ([]byte, int, error) {
 	buffer := make([]byte, 8*1024)
-	connection.SetReadDeadline(time.Now().Add(2500 * time.Millisecond))
+	err := connection.SetReadDeadline(time.Now().Add(2500 * time.Millisecond))
+	if err != nil {
+		return buffer, 0, err
+	}
 	length, err := connection.Read(buffer)
 	return buffer, length, err
 }
@@ -59,7 +68,10 @@ func Flush(connection net.Conn) error {
 	/* Flushing the remaning data in the connection */
 	for err == nil {
 		buffer := make([]byte, 8*1024)
-		connection.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		err = connection.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		if err != nil {
+			return err
+		}
 		_, err = connection.Read(buffer)
 	}
 	return err
@@ -85,8 +97,14 @@ func Connect(host string) (net.Conn, error) {
 
 		/* Create the SSL request message. */
 		message := protocol.NewMessageBuffer([]byte{})
-		message.WriteInt32(8)
-		message.WriteInt32(protocol.SSLRequestCode)
+		_, err = message.WriteInt32(8)
+		if err != nil {
+			return nil, err
+		}
+		_, err = message.WriteInt32(protocol.SSLRequestCode)
+		if err != nil {
+			return nil, err
+		}
 
 		/* Send the SSL request message. */
 		_, err := connection.Write(message.Bytes())

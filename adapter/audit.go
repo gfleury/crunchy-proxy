@@ -46,8 +46,14 @@ func Audit(metadata map[string]interface{}, l *log.Logger) Decorator {
 			if file == nil {
 				createFile(metadata, l)
 			}
-			file.WriteString(fmt.Sprintf("%s msg len=%d\n", now.String(), i))
-			file.Sync()
+			_, err := file.WriteString(fmt.Sprintf("%s msg len=%d\n", now.String(), i))
+			if err != nil {
+				log.Println(err.Error())
+			}
+			err = file.Sync()
+			if err != nil {
+				log.Println(err.Error())
+			}
 			return c.Do(r, i)
 		})
 	}

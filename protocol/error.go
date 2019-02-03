@@ -77,29 +77,69 @@ func (e *Error) Error() string {
 func (e *Error) GetMessage() []byte {
 	msg := NewMessageBuffer([]byte{})
 
-	msg.WriteByte(ErrorResponseMessageType)
-	msg.WriteInt32(0)
+	err := msg.WriteByte(ErrorResponseMessageType)
+	if err != nil {
+		return nil
+	}
 
-	msg.WriteByte(ErrorFieldSeverity)
-	msg.WriteString(e.Severity)
+	_, err = msg.WriteInt32(0)
+	if err != nil {
+		return nil
+	}
 
-	msg.WriteByte(ErrorFieldCode)
-	msg.WriteString(e.Code)
+	err = msg.WriteByte(ErrorFieldSeverity)
+	if err != nil {
+		return nil
+	}
+	_, err = msg.WriteString(e.Severity)
+	if err != nil {
+		return nil
+	}
 
-	msg.WriteByte(ErrorFieldMessage)
-	msg.WriteString(e.Message)
+	err = msg.WriteByte(ErrorFieldCode)
+	if err != nil {
+		return nil
+	}
+	_, err = msg.WriteString(e.Code)
+	if err != nil {
+		return nil
+	}
+
+	err = msg.WriteByte(ErrorFieldMessage)
+	if err != nil {
+		return nil
+	}
+	_, err = msg.WriteString(e.Message)
+	if err != nil {
+		return nil
+	}
 
 	if e.Detail != "" {
-		msg.WriteByte(ErrorFieldMessageDetail)
-		msg.WriteString(e.Detail)
+		err = msg.WriteByte(ErrorFieldMessageDetail)
+		if err != nil {
+			return nil
+		}
+		_, err = msg.WriteString(e.Detail)
+		if err != nil {
+			return nil
+		}
 	}
 
 	if e.Hint != "" {
-		msg.WriteByte(ErrorFieldMessageHint)
-		msg.WriteString(e.Hint)
+		err = msg.WriteByte(ErrorFieldMessageHint)
+		if err != nil {
+			return nil
+		}
+		_, err = msg.WriteString(e.Hint)
+		if err != nil {
+			return nil
+		}
 	}
 
-	msg.WriteByte(0x00) // null terminate the message
+	err = msg.WriteByte(0x00) // null terminate the message
+	if err != nil {
+		return nil
+	}
 
 	msg.ResetLength(PGMessageLengthOffset)
 
