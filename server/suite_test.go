@@ -2,7 +2,6 @@ package server
 
 import (
 	"github.com/akutz/memconn"
-	"sync"
 
 	"testing"
 
@@ -16,16 +15,13 @@ const (
 )
 
 type S struct {
-	s Server
+	s *Server
 }
 
 func Test(t *testing.T) { check.TestingT(t) }
 
 func (s *S) SetUpSuite(c *check.C) {
-	s.s.waitGroup = &sync.WaitGroup{}
-
-	s.s.admin = NewAdminServer(&s.s)
-	s.s.proxy = NewProxyServer(&s.s)
+	s.s = NewServer()
 
 	adminListener, err := memconn.Listen("memu", address)
 	c.Check(err, check.IsNil)
@@ -37,8 +33,4 @@ func (s *S) TearDownSuite(c *check.C) {
 }
 
 func (s *S) SetUpTest(c *check.C) {
-}
-
-func (s *S) TestStatus(c *check.C) {
-
 }

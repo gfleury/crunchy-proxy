@@ -15,17 +15,52 @@ package tests
 
 import (
 	"flag"
+	"github.com/crunchydata/crunchy-proxy/config"
+	"strings"
 	"testing"
 
 	"gopkg.in/check.v1"
+
+	"github.com/crunchydata/crunchy-proxy/server"
 )
 
-var HostPort string
+const (
+	testConfig = `server:
+  proxy:
+    hostport: 0.0.0.0:5433
+  admin:
+    hostport: 127.0.0.1:8000
+
+nodes:
+  master:
+    hostport: 127.0.0.1:5432
+    role: master
+    metadata: {}
+
+credentials:
+  username: postgres
+  database: postgres
+  password: 
+  options:
+  ssl:
+    enable: false
+    sslmode: disable
+
+pool:
+  capacity: 2
+
+healthcheck:
+  delay: 60
+  query: select now();`
+)
+
+var HostPort, DatabaseUrl string
 var rows, userid, password, database string
 
 var _ = check.Suite(&S{})
 
 type S struct {
+	s *server.Server
 }
 
 func Test(t *testing.T) { check.TestingT(t) }
@@ -33,10 +68,18 @@ func Test(t *testing.T) { check.TestingT(t) }
 func (s *S) SetUpSuite(c *check.C) {
 	flag.StringVar(&rows, "rows", "onerow", "onerow or tworows")
 	flag.StringVar(&HostPort, "hostport", "localhost:5433", "host:port")
+	flag.StringVar(&DatabaseUrl, "databaseUrl", "localhost:5432", "host:port")
 	flag.StringVar(&userid, "userid", "postgres", "postgres userid")
-	flag.StringVar(&password, "password", "mysecretpassword", "postgres password")
+	flag.StringVar(&password, "password", "", "postgres password")
 	flag.StringVar(&database, "database", "postgres", "database")
 	flag.Parse()
+
+	configLoad()
+	s.s = server.NewServer()
+
+	go func() {
+		s.s.Start()
+	}()
 }
 
 func (s *S) TearDownSuite(c *check.C) {
@@ -45,6 +88,6 @@ func (s *S) TearDownSuite(c *check.C) {
 func (s *S) SetUpTest(c *check.C) {
 }
 
-func (s *S) TestStatus(c *check.C) {
-
+func configLoad() {
+	config.ParseConfig(strings.NewReader(testConfig))
 }

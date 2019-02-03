@@ -16,6 +16,8 @@ package config
 
 import (
 	"github.com/spf13/viper"
+	"io"
+	"os"
 
 	"github.com/crunchydata/crunchy-proxy/common"
 	"github.com/crunchydata/crunchy-proxy/util/log"
@@ -130,7 +132,16 @@ func SetConfigPath(path string) {
 }
 
 func ReadConfig() {
-	err := viper.ReadInConfig()
+	file, err := os.Open(viper.ConfigFileUsed())
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	defer file.Close()
+	ParseConfig(file)
+}
+
+func ParseConfig(in io.Reader) {
+	err := viper.ReadConfig(in)
 	log.Debugf("Using configuration file: %s", viper.ConfigFileUsed())
 
 	if err != nil {

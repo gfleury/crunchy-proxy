@@ -1,19 +1,19 @@
 server:
   proxy:
-    hostport: 0.0.0.0:5432
+    hostport: 0.0.0.0:5433
   admin:
     hostport: 127.0.0.1:8000
 
 nodes:
   master:
-    hostport: 127.0.0.1:5433
+    hostport: 127.0.0.1:5432
     role: master
     metadata: {}
   
 credentials:
   username: postgres
-  database: teste
-  password: mysecretpassword
+  database: postgres
+  password: 
   options:
   ssl:
     enable: false

@@ -47,14 +47,14 @@ type Proxy struct {
 	readPools  chan *pool.Pool
 	master     common.Node
 	clients    []net.Conn
-	Stats      map[string]int32
+	stats      map[string]int32
 	lock       *sync.Mutex
 	events     evio.Events
 }
 
 func NewProxy() *Proxy {
 	p := &Proxy{
-		Stats: make(map[string]int32),
+		stats: make(map[string]int32),
 		lock:  &sync.Mutex{},
 	}
 
@@ -129,11 +129,17 @@ func (p *Proxy) setupPools() {
 
 // Get the next pool. If read is set to true, then a 'read-only' pool will be
 // returned. Otherwise, a 'read-write' pool will be returned.
-func (p *Proxy) getPool(read bool) *pool.Pool {
+func (p *Proxy) getPool(read bool) (*pool.Pool, bool) {
 	if read {
-		return <-p.readPools
+		select {
+		case res := <-p.readPools:
+			return res, read
+		case <-time.After(500 * time.Millisecond):
+			log.Infof("Client: No read Pool available, trying to move foward with write pool")
+			read = !read
+		}
 	}
-	return <-p.writePools
+	return <-p.writePools, read
 }
 
 // Return the pool. If read is 'true' then, the pool will be returned to the
@@ -364,7 +370,7 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 					 * set, then fetch a new backend to receive the message.
 					 */
 					if !client.poolConnection.transactionBlock || client.poolConnection.cp == nil || client.poolConnection.backend == nil {
-						client.poolConnection.cp = s.getPool(client.poolConnection.read)
+						client.poolConnection.cp, client.poolConnection.read = s.getPool(client.poolConnection.read)
 						client.poolConnection.backend = client.poolConnection.cp.Next()
 						client.poolConnection.nodeName = client.poolConnection.cp.Name
 						s.returnPool(client.poolConnection.cp, client.poolConnection.read)
@@ -518,4 +524,12 @@ func (s *Proxy) Closed(c evio.Conn, err error) (action evio.Action) {
 func (s *Proxy) Serve(listenUrl string) error {
 	err := evio.Serve(s.events, fmt.Sprintf("tcp-net://%s", listenUrl))
 	return err
+}
+
+func (s *Proxy) Stop() (err error) {
+	return err
+}
+
+func (s *Proxy) Stats() map[string]int32 {
+	return s.stats
 }

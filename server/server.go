@@ -19,12 +19,13 @@ import (
 	"sync"
 
 	"github.com/crunchydata/crunchy-proxy/config"
+	"github.com/crunchydata/crunchy-proxy/proxy"
 	"github.com/crunchydata/crunchy-proxy/util/log"
 )
 
 type Server struct {
 	admin     *AdminServer
-	proxy     *ProxyServer
+	proxy     *proxy.Proxy
 	waitGroup *sync.WaitGroup
 }
 
@@ -35,7 +36,7 @@ func NewServer() *Server {
 
 	s.admin = NewAdminServer(s)
 
-	s.proxy = NewProxyServer(s)
+	s.proxy = proxy.NewProxy()
 
 	return s
 
@@ -56,7 +57,7 @@ func (s *Server) Start() {
 	s.waitGroup.Add(1)
 	go s.admin.Serve(adminListener)
 
-	if err := s.proxy.p.Serve(proxyConfig.HostPort); err != nil {
+	if err := s.proxy.Serve(proxyConfig.HostPort); err != nil {
 		panic(err.Error())
 	}
 

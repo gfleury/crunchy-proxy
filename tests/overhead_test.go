@@ -29,7 +29,7 @@ func (s *S) TestOverhead(c *check.C) {
 	proxyconn, err = Connect()
 	c.Check(err, check.IsNil)
 
-	HostPort = "localhost:12000"
+	HostPort = "localhost:5432"
 	conn, err = Connect()
 	c.Check(err, check.IsNil)
 
