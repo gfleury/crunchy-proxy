@@ -3,13 +3,10 @@
 # Installation Guide - Crunchy Proxy
 Crunchy Data Solutions, Inc.
 v0.0.1, {docdate}
-image::docs/crunchy_logo.png?raw=true[]
 
 ## Project
 
 *crunchy-proxy* is a minimal PostgreSQL-aware proxy used to handle PostgreSQL application requests.  The diagram below depicts a PostgreSQL client application connecting to the *crunchy-proxy*, which appears to the PostgreSQL application as any other PostgreSQL database connection.  The *crunchy-proxy* accepts the inbound client requests, and routes them to an appropriate PostgreSQL cluster member (as described in more detail below).
-
-image::docs/proxy-diagram.png?raw=true["scaledwidth="50%"]
 
 To the PostgreSQL server, the *crunchy-proxy* is transparent and appears as any other
 PostgreSQL client would appear.  As described in more detail below, the *crunchy-proxy* currently provides the following capabilities:
@@ -49,7 +46,7 @@ drop table boofar (id int);
 
 If a SQL statement does not include an annotation, the the statement is deemed a *write* and thus sent to the master cluster member.
 
-By parsing only the annotation, *crunchy-proxy* simplifies the complexity associated with determining whether a SQL statement is a *write* or *read* and thus to which member (master or replica) of a PostgreSQL cluser to send a SQL statement. 
+By parsing only the annotation, *crunchy-proxy* simplifies the complexity associated with determining whether a SQL statement is a *write* or *read* and thus to which member (master or replica) of a PostgreSQL cluser to send a SQL statement.
 
 In taking this approach, *crunchy-proxy* has assumed (1) a user has access to their application's SQL and (2) a user has the ability to add the annotation in their SQL statements.  If they do, then they can use the *crunchy-proxy* for SQL routing.  
 
@@ -106,6 +103,7 @@ feel free to create a github issue.
 ## Legal Notices
 
 Copyright © 2017 Crunchy Data Solutions, Inc.
+
 Copyright © 2019 George Fleury
 
 CRUNCHY DATA SOLUTIONS, INC. PROVIDES THIS GUIDE "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF NON INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
