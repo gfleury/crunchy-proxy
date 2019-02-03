@@ -38,6 +38,15 @@ ignored = ["scripts"]
   name = "github.com/tidwall/evio"
   revision = "b353be3a765785dafabbb63a7b25aadec3533946"
 
+[[constraint]]
+  name = "github.com/IBM-Bluemix/golang-openssl-wrapper"
+  revision = "7f2d5273b515d8c77999c7481c39dedf8ab60f78"
+  
 [prune]
   go-tests = true
   unused-packages = true
+
+  [[prune.project]]
+    name = "github.com/IBM-Bluemix/golang-openssl-wrapper"
+    non-go = false
+    unused-packages = false

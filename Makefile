@@ -14,7 +14,7 @@
 
 .PHONY: all build clean clean-docs docs docker docker-push resolve install release run default
 
-all: clean resolve build
+all: clean build
 
 RELEASE_VERSION := 1.0.0-beta
 PROJECT_DIR := $(shell pwd)
@@ -33,7 +33,6 @@ RELEASE_ARCHIVE := $(DIST_DIR)/crunchyproxy-$(RELEASE_VERSION).tar.gz
 clean:
 	@echo "Cleaning project..."
 	@rm -rf $(DIST_DIR)
-	@rm -rf $(VENDOR_DIR)
 	@go clean -i
 
 resolve:

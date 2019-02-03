@@ -2,6 +2,15 @@
 
 
 [[projects]]
+  name = "github.com/IBM-Bluemix/golang-openssl-wrapper"
+  packages = [
+    "bio",
+    "crypto",
+    "ssl"
+  ]
+  revision = "7f2d5273b515d8c77999c7481c39dedf8ab60f78"
+
+[[projects]]
   name = "github.com/Sirupsen/logrus"
   packages = ["."]
   revision = "85b1699d505667d13f8ac4478c1debbf85d6c5de"
@@ -218,6 +227,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "c6ea5e231c258c5c41a46cddb6666b3420bfba2421da9a2da5a942a0490e4d77"
+  inputs-digest = "7fae5867157fa7ed2b72628803e602d322f5701f4e1bf6779fe5ae14e4078160"
   solver-name = "gps-cdcl"
   solver-version = 1
