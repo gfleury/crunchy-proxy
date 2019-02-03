@@ -1,8 +1,8 @@
 # ignore build/dependency related directories
-vendor
 build
 dist
 docs/pdf
+coverage.txt
 
 # ignore test/dev environment related directories
 .docker

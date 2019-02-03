@@ -25,14 +25,24 @@ import (
 // assume a write if there is no comment in the SQL
 // or if there are no keywords in the comment
 // return (write, start, finish) booleans
-func getAnnotations(m []byte) map[AnnotationType]bool {
+func getAnnotations(m []byte) (map[AnnotationType]bool, error) {
 	message := protocol.NewMessageBuffer(m)
-	annotations := make(map[AnnotationType]bool, 0)
+	annotations := make(map[AnnotationType]bool)
 
 	/* Get the query string */
-	message.ReadByte()  // read past the message type
-	message.ReadInt32() // read past the message length
-	query, _ := message.ReadString()
+	_, err := message.ReadByte() // read past the message type
+	if err != nil {
+		return annotations, err
+	}
+	_, err = message.ReadInt32() // read past the message length
+	if err != nil {
+		return annotations, err
+	}
+
+	query, err := message.ReadString()
+	if err != nil {
+		return annotations, err
+	}
 
 	/* Find the start and end position of the annotations. */
 	startPos := strings.Index(query, AnnotationStartToken)
@@ -43,7 +53,7 @@ func getAnnotations(m []byte) map[AnnotationType]bool {
 	 * an annotation was not found.
 	 */
 	if startPos < 0 || endPos < 0 {
-		return annotations
+		return annotations, nil
 	}
 
 	/* Deterimine which annotations were specified as part of the query */
@@ -60,5 +70,5 @@ func getAnnotations(m []byte) map[AnnotationType]bool {
 		}
 	}
 
-	return annotations
+	return annotations, nil
 }

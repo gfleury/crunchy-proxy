@@ -22,6 +22,7 @@ BUILD_DIR := $(PROJECT_DIR)/build
 DIST_DIR := $(PROJECT_DIR)/dist
 VENDOR_DIR := $(PROJECT_DIR)/vendor
 DOCS_DIR := $(PROJECT_DIR)/docs
+PKGS = $$(go list ./... | grep -v /vendor/)
 
 BUILD_TARGET := $(PROJECT_DIR)/main.go
 
@@ -37,7 +38,7 @@ clean:
 
 resolve:
 	@echo "Resolving depenencies..."
-	@glide up
+	@dep ensure
 
 build:
 	@echo "Building project..."
@@ -68,3 +69,19 @@ docker:
 
 docker-push:
 	docker push crunchydata/crunchy-proxy:centos7-$(RELEASE_VERSION)
+
+test:
+	@go clean $(PKGS)
+	@go test $(PKGS) -check.v -coverprofile=coverage.txt -covermode=atomic
+
+race:
+	@go clean $(PKGS)
+	@go test -race $(PKGS) -check.v -coverprofile=coverage.txt -covermode=atomic
+
+profile:
+	@go clean $(PKGS)
+	make
+
+lint:
+	@go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
+	golangci-lint run

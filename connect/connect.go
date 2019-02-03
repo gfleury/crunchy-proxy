@@ -16,6 +16,7 @@ package connect
 
 import (
 	"net"
+	"time"
 
 	"github.com/crunchydata/crunchy-proxy/config"
 	"github.com/crunchydata/crunchy-proxy/protocol"
@@ -23,13 +24,57 @@ import (
 )
 
 func Send(connection net.Conn, message []byte) (int, error) {
+	err := connection.SetWriteDeadline(time.Now().Add(5000 * time.Millisecond))
+	if err != nil {
+		return 0, err
+	}
 	return connection.Write(message)
 }
 
-func Receive(connection net.Conn) ([]byte, int, error) {
-	buffer := make([]byte, 4096)
+func Read(connection net.Conn, size int) ([]byte, int, error) {
+	buffer := make([]byte, size)
+	err := connection.SetReadDeadline(time.Now().Add(2500 * time.Millisecond))
+	if err != nil {
+		return buffer, 0, err
+	}
 	length, err := connection.Read(buffer)
 	return buffer, length, err
+}
+
+/*
+ * We try to send at least 8K at a time, which is the usual size of pipe
+ * buffers on Unix systems.  That way, when we are sending a large amount
+ * of data, we avoid incurring extra kernel context swaps for partial
+ * bufferloads.  The output buffer is initially made 16K in size, and we
+ * try to dump it after accumulating 8K.
+ *
+ * With the same goal of minimizing context swaps, the input buffer will
+ * be enlarged anytime it has less than 8K free, so we initially allocate
+ * twice that.
+ */
+func Receive(connection net.Conn) ([]byte, int, error) {
+	buffer := make([]byte, 8*1024)
+	err := connection.SetReadDeadline(time.Now().Add(2500 * time.Millisecond))
+	if err != nil {
+		return buffer, 0, err
+	}
+	length, err := connection.Read(buffer)
+	return buffer, length, err
+}
+
+func Flush(connection net.Conn) error {
+	var err error
+
+	/* Flushing the remaning data in the connection */
+	for err == nil {
+		buffer := make([]byte, 8*1024)
+		err = connection.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		if err != nil {
+			return err
+		}
+		_, err = connection.Read(buffer)
+	}
+	return err
 }
 
 func Connect(host string) (net.Conn, error) {
@@ -52,8 +97,14 @@ func Connect(host string) (net.Conn, error) {
 
 		/* Create the SSL request message. */
 		message := protocol.NewMessageBuffer([]byte{})
-		message.WriteInt32(8)
-		message.WriteInt32(protocol.SSLRequestCode)
+		_, err = message.WriteInt32(8)
+		if err != nil {
+			return nil, err
+		}
+		_, err = message.WriteInt32(protocol.SSLRequestCode)
+		if err != nil {
+			return nil, err
+		}
 
 		/* Send the SSL request message. */
 		_, err := connection.Write(message.Bytes())

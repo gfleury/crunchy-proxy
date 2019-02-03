@@ -67,10 +67,10 @@ func main() {
 		for i := 0; i < count; i++ {
 			OneRow(conn)
 		}
-		break
+
 	case "tworows":
 		TwoRows(conn)
-		break
+
 	}
 
 	log.Println("execution ends")
@@ -99,6 +99,9 @@ func OneRow(conn *sql.DB) {
 func TwoRows(conn *sql.DB) {
 	var timestamp string
 	rows, err := conn.Query("/* read */ select text(generate_series(1,2))")
+	if err != nil {
+		log.Fatalf(err.Error())
+	}
 	defer rows.Close()
 
 	for rows.Next() {

@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/gfleury/crunchy-proxy.svg?branch=master)](https://travis-ci.org/gfleury/crunchy-proxy) [![codecov](https://codecov.io/gh/gfleury/crunchy-proxy/branch/master/graph/badge.svg)](https://codecov.io/gh/gfleury/crunchy-proxy)
+
 = Installation Guide - Crunchy Proxy
 Crunchy Data Solutions, Inc.
 v0.0.1, {docdate}

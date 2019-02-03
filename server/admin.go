@@ -40,7 +40,7 @@ type AdminServer struct {
 func NewAdminServer(s *Server) *AdminServer {
 	admin := &AdminServer{
 		server:     s,
-		nodeHealth: make(map[string]bool, 0),
+		nodeHealth: make(map[string]bool),
 	}
 
 	admin.grpc = grpc.NewServer()
@@ -53,7 +53,7 @@ func NewAdminServer(s *Server) *AdminServer {
 func (s *AdminServer) Nodes(ctx context.Context, req *pb.NodeRequest) (*pb.NodeResponse, error) {
 	var response pb.NodeResponse
 
-	response.Nodes = make(map[string]string, 0)
+	response.Nodes = make(map[string]string)
 
 	for name, node := range config.GetNodes() {
 		response.Nodes[name] = node.HostPort
@@ -72,7 +72,10 @@ func (s *AdminServer) Pools(ctx context.Context, req *pb.PoolRequest) (*pb.PoolR
 
 func (s *AdminServer) Shutdown(req *pb.ShutdownRequest, stream pb.Admin_ShutdownServer) error {
 	// Stop the Proxy Server
-	s.server.proxy.Stop()
+	err := s.server.proxy.Stop()
+	if err != nil {
+		return err
+	}
 
 	// Stop the Admin grpc Server
 	s.grpc.Stop()

@@ -19,12 +19,13 @@ import (
 	"sync"
 
 	"github.com/crunchydata/crunchy-proxy/config"
+	"github.com/crunchydata/crunchy-proxy/proxy"
 	"github.com/crunchydata/crunchy-proxy/util/log"
 )
 
 type Server struct {
 	admin     *AdminServer
-	proxy     *ProxyServer
+	proxy     *proxy.Proxy
 	waitGroup *sync.WaitGroup
 }
 
@@ -35,9 +36,10 @@ func NewServer() *Server {
 
 	s.admin = NewAdminServer(s)
 
-	s.proxy = NewProxyServer(s)
+	s.proxy = proxy.NewProxy()
 
 	return s
+
 }
 
 func (s *Server) Start() {
@@ -45,6 +47,7 @@ func (s *Server) Start() {
 	adminConfig := config.GetAdminConfig()
 
 	log.Info("Admin Server Starting...")
+
 	adminListener, err := net.Listen("tcp", adminConfig.HostPort)
 
 	if err != nil {
@@ -54,13 +57,9 @@ func (s *Server) Start() {
 	s.waitGroup.Add(1)
 	go s.admin.Serve(adminListener)
 
-	log.Info("Proxy Server Starting...")
-	proxyListener, err := net.Listen("tcp", proxyConfig.HostPort)
-
-	s.waitGroup.Add(1)
-	go s.proxy.Serve(proxyListener)
-
-	s.waitGroup.Wait()
+	if err := s.proxy.Serve(proxyConfig.HostPort); err != nil {
+		panic(err.Error())
+	}
 
 	log.Info("Server Exiting...")
 }

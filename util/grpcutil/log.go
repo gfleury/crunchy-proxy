@@ -16,6 +16,7 @@ package grpcutil
 
 import (
 	"fmt"
+	"github.com/crunchydata/crunchy-proxy/util/log"
 
 	"google.golang.org/grpc/grpclog"
 )
@@ -45,7 +46,7 @@ func (*logger) Print(args ...interface{}) {
 }
 
 func (*logger) Printf(format string, args ...interface{}) {
-	grpclog.Printf(format, args)
+	log.Infof(format, args...)
 }
 
 func (*logger) Println(args ...interface{}) {

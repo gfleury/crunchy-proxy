@@ -20,12 +20,12 @@ import (
 	"github.com/Sirupsen/logrus"
 )
 
-var levels = []string{
-	"debug",
-	"info",
-	"error",
-	"fatal",
-}
+// var levels = []string{
+// 	"debug",
+// 	"info",
+// 	"error",
+// 	"fatal",
+// }
 
 func init() {
 	logrus.SetFormatter(&logrus.TextFormatter{
