@@ -1,11 +1,11 @@
 [![Build Status](https://travis-ci.org/gfleury/crunchy-proxy.svg?branch=master)](https://travis-ci.org/gfleury/crunchy-proxy) [![codecov](https://codecov.io/gh/gfleury/crunchy-proxy/branch/master/graph/badge.svg)](https://codecov.io/gh/gfleury/crunchy-proxy)
 
-= Installation Guide - Crunchy Proxy
+# Installation Guide - Crunchy Proxy
 Crunchy Data Solutions, Inc.
 v0.0.1, {docdate}
 image::docs/crunchy_logo.png?raw=true[]
 
-== Project
+## Project
 
 *crunchy-proxy* is a minimal PostgreSQL-aware proxy used to handle PostgreSQL application requests.  The diagram below depicts a PostgreSQL client application connecting to the *crunchy-proxy*, which appears to the PostgreSQL application as any other PostgreSQL database connection.  The *crunchy-proxy* accepts the inbound client requests, and routes them to an appropriate PostgreSQL cluster member (as described in more detail below).
 
@@ -27,7 +27,7 @@ PostgreSQL client would appear.  As described in more detail below, the *crunchy
  
 As described under "Approach" below, implementation of the *crunchy-proxy* requires that (1) a user has access to their application's SQL and (2) a user has the ability to add basic annotations to their SQL statements.
 
-== Approach
+## Approach
 
 One of the key features of the *crunchy-proxy* is the ability to route different SQL statements to a PostgreSQL cluster members based on certain pre-defined rules.  This capability enables end-user applications to see a PostgreSQL cluster as a single connection.  In order to support this capability, it is necessary that *crunchy-proxy* have knowledge of the SQL statements that a PostgreSQL application sends to PostgreSQL.
 
@@ -55,7 +55,7 @@ In taking this approach, *crunchy-proxy* has assumed (1) a user has access to th
 
 Of course these assumptions introduce certain limitations on the *crunchy-proxy*.  Nonetheless, it was determined that these assumptions will not be unduly limiting in the usability of the *crunchy-proxy* and that the resulting limiations are justified by the benefits of (1) reduction in complexity associated with SQL parsing implementation, (2) increase in proxy throughput and (3) improved routing accuracy of the SQL parsing.
 
-== PostgreSQL Wire Protocol
+## PostgreSQL Wire Protocol
 
 *crunchy-proxy* operates at the PostgreSQL wire protocol (network) layer to understand PostgreSQL client authentication requests and SQL statements passed by a client to a PostgreSQL backend.
 
@@ -71,7 +71,7 @@ The following resources are useful in understanding the PostgreSQL wire protocol
 
 In the future, by working at the wire protocol level, *crunchy-proxy* can implement a variety of features important for high speed proxy handling and for supporting PostgreSQL features.
 
-== Execution
+## Execution
 
 The proxy is a golang binary, you execute it as follows:
 ....
@@ -98,16 +98,16 @@ found in the link:docs/crunchy-proxy-user-guide.asciidoc[User Guide]
 For Docker users, you can run the proxy using the 
 link:bin/run-docker.sh[run-docker.sh] script.
 
-== Feedback
+## Feedback
 
 If you find a bug, or want to provide feedback on the design and features 
 feel free to create a github issue.  
 
-== Legal Notices
+## Legal Notices
 
 Copyright © 2017 Crunchy Data Solutions, Inc.
+Copyright © 2019 George Fleury
 
 CRUNCHY DATA SOLUTIONS, INC. PROVIDES THIS GUIDE "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF NON INFRINGEMENT, MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
 
 Crunchy, Crunchy Data Solutions, Inc. and the Crunchy Hippo Logo are trademarks of Crunchy Data Solutions, Inc.
-
