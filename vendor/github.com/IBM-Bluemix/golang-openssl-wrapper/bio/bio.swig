@@ -3,6 +3,7 @@
 %{
 #include <openssl/bio.h>
 #include <openssl/ssl.h>
+#include <openssl/err.h>
 %}
 
 %include "typemaps.i"
@@ -88,3 +89,9 @@ BIO *BIO_new_ssl_connect(SSL_CTX *ctx);
 // int SSL_set_cipher_list(SSL *s, const char *str);
 
 // #define BIO_get_ssl(b,sslp)     BIO_ctrl(b,BIO_C_GET_SSL,0,(char *)sslp)
+
+void ERR_print_errors(BIO *bp);
+long BIO_get_mem_data(BIO *b, char **pp);
+void ERR_print_errors_cb(int (*cb) (const char *str, size_t len, void *u), void *u);
+unsigned long ERR_get_error(void);
+char *ERR_error_string(unsigned long e, char *buf);

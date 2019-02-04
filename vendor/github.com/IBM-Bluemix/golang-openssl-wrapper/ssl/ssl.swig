@@ -85,3 +85,53 @@ int SSL_write(SSL *ssl, const void *buf, int num);
 
 %apply char *CHARBUF { void *buf };
 int SSL_read(SSL *ssl, void *buf, int num);
+
+void SSL_set_bio(SSL *ssl, BIO *rbio, BIO *wbio);
+// void SSL_set0_rbio(SSL *s, BIO *rbio);
+// void SSL_set0_wbio(SSL *s, BIO *wbio);
+
+void SSL_set_connect_state(SSL *ssl);
+void SSL_set_accept_state(SSL *ssl);
+
+int SSL_do_handshake(SSL *ssl);
+int SSL_state(const SSL *ssl);
+
+int SSL_CTX_use_certificate(SSL_CTX *ctx, X509 *x);
+int SSL_CTX_use_certificate_ASN1(SSL_CTX *ctx, int len, unsigned char *d);
+int SSL_CTX_use_certificate_file(SSL_CTX *ctx, const char *file, int type);
+int SSL_use_certificate(SSL *ssl, X509 *x);
+int SSL_use_certificate_ASN1(SSL *ssl, unsigned char *d, int len);
+int SSL_use_certificate_file(SSL *ssl, const char *file, int type);
+
+int SSL_CTX_use_certificate_chain_file(SSL_CTX *ctx, const char *file);
+
+int SSL_CTX_use_PrivateKey(SSL_CTX *ctx, EVP_PKEY *pkey);
+int SSL_CTX_use_PrivateKey_ASN1(int pk, SSL_CTX *ctx, unsigned char *d,
+                                long len);
+int SSL_CTX_use_PrivateKey_file(SSL_CTX *ctx, const char *file, int type);
+int SSL_CTX_use_RSAPrivateKey(SSL_CTX *ctx, RSA *rsa);
+int SSL_CTX_use_RSAPrivateKey_ASN1(SSL_CTX *ctx, unsigned char *d, long len);
+int SSL_CTX_use_RSAPrivateKey_file(SSL_CTX *ctx, const char *file, int type);
+int SSL_use_PrivateKey(SSL *ssl, EVP_PKEY *pkey);
+int SSL_use_PrivateKey_ASN1(int pk,SSL *ssl, unsigned char *d, long len);
+int SSL_use_PrivateKey_file(SSL *ssl, const char *file, int type);
+int SSL_use_RSAPrivateKey(SSL *ssl, RSA *rsa);
+int SSL_use_RSAPrivateKey_ASN1(SSL *ssl, unsigned char *d, long len);
+int SSL_use_RSAPrivateKey_file(SSL *ssl, const char *file, int type);
+
+int SSL_CTX_check_private_key(const SSL_CTX *ctx);
+int SSL_check_private_key(const SSL *ssl);
+
+
+long SSL_CTX_set_options(SSL_CTX *ctx, long options);
+long SSL_set_options(SSL *ssl, long options);
+
+long SSL_CTX_clear_options(SSL_CTX *ctx, long options);
+long SSL_clear_options(SSL *ssl, long options);
+
+long SSL_CTX_get_options(SSL_CTX *ctx);
+long SSL_get_options(SSL *ssl);
+
+long SSL_get_secure_renegotiation_support(SSL *ssl);
+
+const SSL_METHOD *TLSv1_2_server_method(void);

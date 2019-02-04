@@ -15,7 +15,7 @@ limitations under the License.
 package proxy
 
 import (
-	"github.com/crunchydata/crunchy-proxy/proxy/sslWrapper"
+	_ "github.com/crunchydata/crunchy-proxy/proxy/ssl"
 )
 
 const (
@@ -39,7 +39,6 @@ const (
 type AnnotationType int
 
 func (a AnnotationType) String() string {
-	sslWrapper.InitSSL()
 	switch a {
 	case ReadAnnotation:
 		return readAnnotationString

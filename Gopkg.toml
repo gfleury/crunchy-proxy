@@ -48,5 +48,4 @@ ignored = ["scripts"]
 
   [[prune.project]]
     name = "github.com/IBM-Bluemix/golang-openssl-wrapper"
-    non-go = false
     unused-packages = false
