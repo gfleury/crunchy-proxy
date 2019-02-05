@@ -1,6 +1,9 @@
 language: go
 go_import_path: github.com/crunchydata/crunchy-proxy
 install: true
+before_install:
+  - sudo apt-get update
+  - sudo apt-get install -y swig
 services:
   - postgresql
 go:
