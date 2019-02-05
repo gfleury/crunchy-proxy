@@ -3,31 +3,35 @@ package ssl
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/crunchydata/crunchy-proxy/util/log"
+	"gopkg.in/check.v1"
 	"net"
 	"testing"
 	"time"
 
-	"gopkg.in/check.v1"
+	"github.com/IBM-Bluemix/golang-openssl-wrapper/ssl"
+
+	"github.com/crunchydata/crunchy-proxy/util/log"
 )
 
 var _ = check.Suite(&S{})
 
 type S struct {
-	s *SSL
+	ctx SSL_CTX
 }
 
 func Test(t *testing.T) { check.TestingT(t) }
 
 func (s *S) SetUpSuite(c *check.C) {
-	s.s = NewSSL()
-	err := s.s.InitCTX()
+	var err error
+	s.ctx, err = NewServerCTX("cert_test/server.crt", "cert_test/server.key")
 	c.Check(err, check.IsNil)
 
 	log.SetLevel("debug")
 }
 
-func (s *S) TestOpenssl(c *check.C) {
+func (s *S) TestBasicOpensslConnection(c *check.C) {
+	sslConn := NewSSL()
+
 	// listen on all interfaces
 	ln, err := net.Listen("tcp", "127.0.0.1:8281")
 	c.Check(err, check.IsNil)
@@ -40,53 +44,66 @@ func (s *S) TestOpenssl(c *check.C) {
 			conn, err := ln.Accept()
 			c.Check(err, check.IsNil)
 
-			s.s.InitConnection()
-			buf := make([]byte, 4096)
+			sslConn.InitConnection(s.ctx)
 
-			for {
+			n := 0
+			ourBuf := make([]byte, 4096)
+			hasDone := false
 
-				n, err := conn.Read(buf)
-				c.Check(err, check.IsNil)
+			var sslBuf []byte
 
-				if s.s.WriteEncrypted(buf, n) == -2 {
-					for {
-						buff, nn := s.s.ReadEncrypted(4096)
-						if nn < 0 {
-							break
-						}
-						xx, err := conn.Write(buff[:nn])
-						c.Check(err, check.IsNil)
-						fmt.Printf("Wrote %d\n", xx)
-					}
+			// SSL Handshake
+			for n, _ = conn.Read(ourBuf); ; n, _ = conn.Read(ourBuf) {
+				sslBuf, n, hasDone = sslConn.DoHandshake(ourBuf, n)
+				if n > 0 {
+					conn.Write(sslBuf[:n])
 				}
-				if s.s.SSL_is_init_finished() {
+				if hasDone {
 					break
 				}
+				conn.SetReadDeadline(time.Now().Add(time.Second * 1))
 			}
-			SSLReply, xx := s.s.ReadDecrypted(4096)
+
+			// Normal Connection Loop
 			for {
 				conn.SetReadDeadline(time.Now().Add(time.Second * 1))
-				n, _ := conn.Read(buf)
+				n, _ = conn.Read(ourBuf)
 
-				s.s.WriteEncrypted(buf, n)
-				SSLReply, xx = s.s.ReadDecrypted(4096)
+				sslConn.WriteEncrypted(ourBuf, n)
+
+				sslBuf, n = sslConn.ReadDecrypted(4096)
+
 				// output message received
-				if xx > 0 {
+				if n > 0 {
+					fmt.Print("Message Received: ", string(sslBuf[:n]))
 					break
 				}
 				for {
-					buff, nn := s.s.ReadEncrypted(4096)
-					if nn < 0 {
+					sslBuf, n = sslConn.ReadEncrypted(4096)
+					if n < 0 {
 						break
 					}
-					xx, err := conn.Write(buff[:nn])
+					n, err = conn.Write(sslBuf[:n])
 					c.Check(err, check.IsNil)
-					fmt.Printf("Wrote %d\n", xx)
 				}
 			}
-			fmt.Print("Message Received: ", string(SSLReply[:xx]))
+
+			c.Check(string(sslBuf[:n]), check.Equals, "hello\n")
+
+			// Write a response
+			sslConn.WriteDecrypted([]byte("hello back foreigner!\n"))
+			for {
+				sslBuf, n = sslConn.ReadEncrypted(4096)
+				if n < 0 {
+					break
+				}
+				n, err = conn.Write(sslBuf[:n])
+				c.Check(err, check.IsNil)
+			}
 
 			conn.Close()
+			sslConn.DestroyConnection()
+			sslConn = nil
 			break
 		}
 	}()
@@ -104,7 +121,8 @@ func (s *S) TestOpenssl(c *check.C) {
 	c.Check(err, check.IsNil)
 
 	buf := make([]byte, 100)
-	_, err = conn.Read(buf)
-	c.Check(err, check.ErrorMatches, "EOF")
-
+	n, err := conn.Read(buf)
+	c.Check(err, check.IsNil)
+	c.Check(buf[:n], check.DeepEquals, []byte("hello back foreigner!\n"))
+	ssl.SSL_CTX_free(s.ctx)
 }

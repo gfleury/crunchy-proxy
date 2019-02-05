@@ -41,7 +41,7 @@ const (
 )
 
 /*
- *
+ * Dead Code.
  */
 func UpgradeServerConnection(client net.Conn) net.Conn {
 	creds := config.GetCredentials()

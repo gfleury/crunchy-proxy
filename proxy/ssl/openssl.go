@@ -21,13 +21,14 @@ const (
 	SSL_ERROR_WANT_CONNECT     = 7
 	SSL_ERROR_WANT_ACCEPT      = 8
 
-	SSLSTATUS_OK      = 0
-	SSLSTATUS_WANT_IO = 1
-	SSLSTATUS_FAIL    = 2
+	SSL_OP_ALL      = 0x80000BFF
+	SSL_OP_NO_SSLv2 = 0x01000000
+	SSL_OP_NO_SSLv3 = 0x02000000
 )
 
+type SSL_CTX ssl.SSL_CTX
+
 type SSL struct {
-	ctx  ssl.SSL_CTX
 	ssl  ssl.SSL
 	rbio bio.BIO /* SSL reads from, we write to. */
 	wbio bio.BIO /* SSL writes to, we read from. */
@@ -48,37 +49,50 @@ func NewSSL() *SSL {
 	return sslInstance
 }
 
-func (s *SSL) InitCTX() (err error) {
-	s.ctx, err = ctxInit("", ssl.SSLv23_server_method())
-	return err
-
+func NewServerCTX(certPEMFile, keyPEMFile string) (SSL_CTX, error) {
+	return ctxInit(ssl.SSLv23_server_method(), "", certPEMFile, keyPEMFile)
 }
 
-func (s *SSL) InitConnection() {
+func (s *SSL) InitConnection(ctx SSL_CTX) error {
 	s.rbio = bio.BIO_new(bio.BIO_s_mem())
-	s.wbio = bio.BIO_new(bio.BIO_s_mem())
+	if s.rbio == nil {
+		return fmt.Errorf("BIO_new for rbio failed: %s", opensslError())
+	}
 
-	s.ssl = ssl.SSL_new(s.ctx)
+	s.wbio = bio.BIO_new(bio.BIO_s_mem())
+	if s.wbio == nil {
+		bio.BIO_free(s.rbio)
+		return fmt.Errorf("BIO_new for wbio failed: %s", opensslError())
+	}
+
+	s.ssl = ssl.SSL_new(ctx)
+	if s.ssl == nil {
+		bio.BIO_free(s.rbio)
+		bio.BIO_free(s.wbio)
+		return fmt.Errorf("SSL_new failed: %s", opensslError())
+	}
 
 	ssl.SSL_set_accept_state(s.ssl)
 	ssl.SSL_set_bio(s.ssl, s.rbio, s.wbio)
+	return nil
 }
 
 func (s *SSL) DestroyConnection() {
 	ssl.SSL_free(s.ssl)
 }
 
-func (s *SSL) DestroyCTX() {
-	ssl.SSL_CTX_free(s.ctx)
+func DestroyCTX(ctx SSL_CTX) {
+	ssl.SSL_CTX_free(ctx)
 }
 
-func ctxInit(config string, method ssl.SSL_METHOD) (ssl.SSL_CTX, error) {
+func ctxInit(method ssl.SSL_METHOD, opensslConfig, certPEMFile, keyPEMFile string) (ssl.SSL_CTX, error) {
+
 	ssl.SSL_load_error_strings()
 
 	if ssl.SSL_library_init() != 1 {
 		return nil, fmt.Errorf("Unable to initialize openssl")
 	}
-	crypto.OPENSSL_config(config)
+	crypto.OPENSSL_config(opensslConfig)
 
 	ctx := ssl.SSL_CTX_new(method)
 	if ctx == nil {
@@ -88,53 +102,53 @@ func ctxInit(config string, method ssl.SSL_METHOD) (ssl.SSL_CTX, error) {
 	ssl.SSL_CTX_set_verify(ctx, ssl.SSL_VERIFY_NONE, nil)
 	ssl.SSL_CTX_set_verify_depth(ctx, 4)
 
-	errno := ssl.SSL_CTX_use_certificate_chain_file(ctx, "cert_test/server.crt")
+	errno := ssl.SSL_CTX_use_certificate_chain_file(ctx, certPEMFile)
 	if errno != 1 {
 		return nil, fmt.Errorf("SSL_CTX_use_certificate_chain_file: %d %v", errno, opensslError())
 	}
-	errno = ssl.SSL_CTX_use_PrivateKey_file(ctx, "cert_test/server.key", 1)
+	errno = ssl.SSL_CTX_use_PrivateKey_file(ctx, keyPEMFile, ssl.SSL_FILETYPE_PEM)
 	if errno != 1 {
 		return nil, fmt.Errorf("SSL_CTX_use_certificate_chain_file: %d %v", errno, opensslError())
 	}
-	errno = ssl.SSL_CTX_use_certificate_file(ctx, "cert_test/server.crt", 1)
+	errno = ssl.SSL_CTX_use_certificate_file(ctx, certPEMFile, ssl.SSL_FILETYPE_PEM)
 	if errno != 1 {
 		return nil, fmt.Errorf("SSL_CTX_use_certificate_chain_file: %d %v", errno, opensslError())
 	}
-	ssl.SSL_CTX_set_options(ctx, 0x80000BFF|0x01000000|0x02000000)
+	ssl.SSL_CTX_set_options(ctx, SSL_OP_ALL|SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3)
 
 	return ctx, nil
 }
 
 func (s *SSL) WriteEncrypted(src []byte, length int) int {
-
-	for length > 0 {
-		n := bio.BIO_write(s.rbio, string(src[:length]), length)
+	bytesLeft := length
+	for bytesLeft > 0 {
+		n := bio.BIO_write(s.rbio, string(src[:bytesLeft]), bytesLeft)
 
 		if n <= 0 {
 			return -1 /* if BIO write fails, assume unrecoverable */
 		}
 
-		length -= n
+		bytesLeft -= n
 
-		if !s.SSL_is_init_finished() {
+		if !s.HandshakeFinished() {
 			n := ssl.SSL_accept(s.ssl)
 			status := s.SSLStatus(n)
 
 			/* Did SSL request to write bytes? */
-			if status == SSLSTATUS_WANT_IO {
+			if status == SSL_ERROR_WANT_READ || status == SSL_ERROR_WANT_WRITE {
 				return -2
 			}
-			if status == SSLSTATUS_FAIL {
+			if status == SSL_ERROR_SSL {
 				log.Errorf("SSL: Status fail: %s", opensslError())
 				return -1
 			}
-			if !s.SSL_is_init_finished() {
-				return 0
+			if !s.HandshakeFinished() {
+				return -100
 			}
 		}
 	}
 
-	return len(src) - length
+	return length
 }
 
 func (s *SSL) ReadEncrypted(len int) ([]byte, int) {
@@ -153,7 +167,7 @@ func (s *SSL) ReadDecrypted(len int) ([]byte, int) {
 	return buf, len
 }
 
-func (s *SSL) SSL_is_init_finished() bool {
+func (s *SSL) HandshakeFinished() bool {
 	status := ssl.SSL_state(s.ssl)
 	switch status {
 	case 0x1000:
@@ -179,21 +193,19 @@ func (s *SSL) SSL_is_init_finished() bool {
 	return (ssl.SSL_state(s.ssl) == SSL_ST_OK)
 }
 
-func (s *SSL) SSLStatus(n int) int {
-	switch ssl.SSL_get_error(s.ssl, n) {
-	case SSL_ERROR_NONE:
-		return SSLSTATUS_OK
-	case SSL_ERROR_WANT_WRITE:
-		return SSLSTATUS_WANT_IO
-	case SSL_ERROR_WANT_READ:
-		return SSLSTATUS_WANT_IO
-	case SSL_ERROR_ZERO_RETURN:
-		return SSLSTATUS_FAIL
-	case SSL_ERROR_SYSCALL:
-		return SSLSTATUS_FAIL
-	default:
-		return SSLSTATUS_FAIL
+func (s *SSL) DoHandshake(buf []byte, n int) ([]byte, int, bool) {
+	writeStatus := s.WriteEncrypted(buf, n)
+	if writeStatus == -2 {
+		buf, n = s.ReadEncrypted(4096)
+		return buf, n, false
+	} else if writeStatus == 0 {
+		return nil, 0, true
 	}
+	return nil, 0, false
+}
+
+func (s *SSL) SSLStatus(n int) int {
+	return ssl.SSL_get_error(s.ssl, n)
 }
 
 func opensslError() string {
