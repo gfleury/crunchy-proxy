@@ -22,4 +22,7 @@ wget https://github.com/swig/swig/archive/rel-3.0.12.tar.gz \
 && ./configure \
 && make \
 && make install
+
+cd ..
+rm -rf swig-rel-3.0.12 
 set +e # turn off exit on failure (same as +o errexit)
