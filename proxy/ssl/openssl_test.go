@@ -44,30 +44,36 @@ func (s *S) TestBasicOpensslConnection(c *check.C) {
 			conn, err := ln.Accept()
 			c.Check(err, check.IsNil)
 
-			sslConn.InitConnection(s.ctx)
+			err = sslConn.InitConnection(s.ctx)
+			c.Check(err, check.IsNil)
 
 			n := 0
 			ourBuf := make([]byte, 4096)
-			hasDone := false
-
+			var hasDone bool
 			var sslBuf []byte
 
 			// SSL Handshake
 			for n, _ = conn.Read(ourBuf); ; n, _ = conn.Read(ourBuf) {
 				sslBuf, n, hasDone = sslConn.DoHandshake(ourBuf, n)
 				if n > 0 {
-					conn.Write(sslBuf[:n])
+					_, err = conn.Write(sslBuf[:n])
+					c.Check(err, check.IsNil)
 				}
 				if hasDone {
 					break
 				}
-				conn.SetReadDeadline(time.Now().Add(time.Second * 1))
+				err = conn.SetReadDeadline(time.Now().Add(time.Second * 1))
+				c.Check(err, check.IsNil)
 			}
 
 			// Normal Connection Loop
 			for {
-				conn.SetReadDeadline(time.Now().Add(time.Second * 1))
-				n, _ = conn.Read(ourBuf)
+				err = conn.SetReadDeadline(time.Now().Add(time.Second * 1))
+				c.Check(err, check.IsNil)
+				n, err = conn.Read(ourBuf)
+				if err, ok := err.(net.Error); ok && !err.Timeout() {
+					c.Check(err, check.IsNil)
+				}
 
 				sslConn.WriteEncrypted(ourBuf, n)
 
@@ -83,7 +89,7 @@ func (s *S) TestBasicOpensslConnection(c *check.C) {
 					if n < 0 {
 						break
 					}
-					n, err = conn.Write(sslBuf[:n])
+					_, err = conn.Write(sslBuf[:n])
 					c.Check(err, check.IsNil)
 				}
 			}
@@ -97,14 +103,14 @@ func (s *S) TestBasicOpensslConnection(c *check.C) {
 				if n < 0 {
 					break
 				}
-				n, err = conn.Write(sslBuf[:n])
+				_, err = conn.Write(sslBuf[:n])
 				c.Check(err, check.IsNil)
 			}
 
 			conn.Close()
 			sslConn.DestroyConnection()
 			sslConn = nil
-			break
+
 		}
 	}()
 
