@@ -75,7 +75,7 @@ func (s *S) SetUpSuite(c *check.C) {
 	flag.Parse()
 
 	configLoad()
-	s.s = server.NewServer()
+	s.s = server.NewServer(-1)
 
 	go func() {
 		s.s.Start()

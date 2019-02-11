@@ -21,7 +21,7 @@ type S struct {
 func Test(t *testing.T) { check.TestingT(t) }
 
 func (s *S) SetUpSuite(c *check.C) {
-	s.s = NewServer()
+	s.s = NewServer(-1)
 
 	adminListener, err := memconn.Listen("memu", address)
 	c.Check(err, check.IsNil)

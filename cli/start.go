@@ -17,6 +17,7 @@ package cli
 import (
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -29,6 +30,7 @@ import (
 var background bool
 var configPath string
 var logLevel string
+var eventLoops string
 
 var startCmd = &cobra.Command{
 	Use:     "start",
@@ -43,6 +45,7 @@ func init() {
 	boolFlag(flags, &background, FlagBackground)
 	stringFlag(flags, &configPath, FlagConfigPath)
 	stringFlag(flags, &logLevel, FlagLogLevel)
+	stringFlag(flags, &eventLoops, FlagEventLoops)
 }
 
 func runStart(cmd *cobra.Command, args []string) error {
@@ -71,7 +74,11 @@ func runStart(cmd *cobra.Command, args []string) error {
 
 	config.ReadConfig()
 
-	s := server.NewServer()
+	el, err := strconv.Atoi(eventLoops)
+	if err != nil {
+		log.Fatalf("Unable to parse event-loops, should be an number")
+	}
+	s := server.NewServer(el)
 
 	s.Start()
 

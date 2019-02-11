@@ -33,7 +33,7 @@ import (
  * connection - the connection to authenticate against.
  * message - the authentication message sent by the backend.
  */
-func HandleAuthenticationRequest(connection net.Conn, message []byte) bool {
+func HandleAuthenticationRequest(connection net.Conn, buffer, message []byte) bool {
 	var msgLength int32
 	var authType int32
 
@@ -61,7 +61,7 @@ func HandleAuthenticationRequest(connection net.Conn, message []byte) bool {
 		return handleAuthClearText(connection)
 	case protocol.AuthenticationMD5:
 		log.Info("Authenticating with MD5 password.")
-		return handleAuthMD5(connection, message)
+		return handleAuthMD5(connection, buffer, message)
 	case protocol.AuthenticationSCM:
 		log.Error("SCM authentication is not currently supported.")
 	case protocol.AuthenticationGSS:
@@ -92,7 +92,7 @@ func createMD5Password(username string, password string, salt string) string {
 	return fmt.Sprintf("md5%x", md5.Sum([]byte(passwordString)))
 }
 
-func handleAuthMD5(connection net.Conn, message []byte) bool {
+func handleAuthMD5(connection net.Conn, buffer, message []byte) bool {
 	// Get the authentication credentials.
 	creds := config.GetCredentials()
 	username := creds.Username
@@ -114,7 +114,7 @@ func handleAuthMD5(connection net.Conn, message []byte) bool {
 	}
 
 	// Read response from password message.
-	message, _, err = Receive(connection, 1000)
+	message, _, err = Receive(connection, buffer, 1000)
 
 	// Check that read was successful.
 	if err != nil {
@@ -154,7 +154,7 @@ func handleAuthClearText(connection net.Conn) bool {
 //  communication is between the client and the master node. If the client
 //  authenticates successfully with the master node, then 'true' is returned and
 //  the authenticating connection is terminated.
-func AuthenticateClient(client net.Conn, message []byte, length int) (bool, error) {
+func AuthenticateClient(client net.Conn, buffer, message []byte, length int) (bool, error) {
 	var err error
 
 	nodes := config.GetNodes()
@@ -185,7 +185,7 @@ func AuthenticateClient(client net.Conn, message []byte, length int) (bool, erro
 
 	/* Receive startup response. */
 	log.Debug("client auth: receiving startup response from 'master' node")
-	message, length, err = Receive(master, 1000)
+	message, length, err = Receive(master, buffer, 1000)
 
 	if err != nil {
 		log.Error("An error occurred receiving startup response.")
@@ -207,7 +207,7 @@ func AuthenticateClient(client net.Conn, message []byte, length int) (bool, erro
 			log.Errorf("Error %s", err.Error())
 			return false, err
 		}
-		message, length, err = Receive(client, 1000)
+		message, length, err = Receive(client, buffer, 1000)
 
 		/*
 		 * Must check that the client has not closed the connection.  This in
@@ -233,7 +233,7 @@ func AuthenticateClient(client net.Conn, message []byte, length int) (bool, erro
 			return false, err
 		}
 
-		message, length, err = Receive(master, 1000)
+		message, length, err = Receive(master, buffer, 1000)
 		if err != nil {
 			log.Error("An error occurred Reading startup response from master.")
 			log.Errorf("Error %s", err.Error())

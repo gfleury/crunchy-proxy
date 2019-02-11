@@ -14,6 +14,7 @@ import (
  * Represents a client
  */
 type Client struct {
+	receivingBuffer  []byte
 	inputStream      evio.InputStream
 	addr             string
 	phase            connectionPhase

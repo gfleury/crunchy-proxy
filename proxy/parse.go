@@ -15,60 +15,60 @@ limitations under the License.
 
 package proxy
 
-import (
-	"strings"
+// import (
+// 	"strings"
 
-	"github.com/crunchydata/crunchy-proxy/protocol"
-)
+// 	"github.com/crunchydata/crunchy-proxy/protocol"
+// )
 
 // GetAnnotations the annotation approach
 // assume a write if there is no comment in the SQL
 // or if there are no keywords in the comment
 // return (write, start, finish) booleans
-func getAnnotations(m []byte) (map[AnnotationType]bool, error) {
-	message := protocol.NewMessageBuffer(m)
-	annotations := make(map[AnnotationType]bool)
+// func getAnnotations(m []byte) (map[AnnotationType]bool, error) {
+// 	message := protocol.NewMessageBuffer(m)
+// 	annotations := make(map[AnnotationType]bool)
 
-	/* Get the query string */
-	_, err := message.ReadByte() // read past the message type
-	if err != nil {
-		return annotations, err
-	}
-	_, err = message.ReadInt32() // read past the message length
-	if err != nil {
-		return annotations, err
-	}
+// 	/* Get the query string */
+// 	_, err := message.ReadByte() // read past the message type
+// 	if err != nil {
+// 		return annotations, err
+// 	}
+// 	_, err = message.ReadInt32() // read past the message length
+// 	if err != nil {
+// 		return annotations, err
+// 	}
 
-	query, err := message.ReadString()
-	if err != nil {
-		return annotations, err
-	}
+// 	query, err := message.ReadString()
+// 	if err != nil {
+// 		return annotations, err
+// 	}
 
-	/* Find the start and end position of the annotations. */
-	startPos := strings.Index(query, AnnotationStartToken)
-	endPos := strings.Index(query, AnnotationEndToken)
+// 	/* Find the start and end position of the annotations. */
+// 	startPos := strings.Index(query, AnnotationStartToken)
+// 	endPos := strings.Index(query, AnnotationEndToken)
 
-	/*
-	 * If the start or end positions are less than zero then that means that
-	 * an annotation was not found.
-	 */
-	if startPos < 0 || endPos < 0 {
-		return annotations, nil
-	}
+// 	/*
+// 	 * If the start or end positions are less than zero then that means that
+// 	 * an annotation was not found.
+// 	 */
+// 	if startPos < 0 || endPos < 0 {
+// 		return annotations, nil
+// 	}
 
-	/* Deterimine which annotations were specified as part of the query */
-	keywords := strings.Split(query[startPos+2:endPos], ",")
+// 	/* Deterimine which annotations were specified as part of the query */
+// 	keywords := strings.Split(query[startPos+2:endPos], ",")
 
-	for i := 0; i < len(keywords); i++ {
-		switch strings.TrimSpace(keywords[i]) {
-		case readAnnotationString:
-			annotations[ReadAnnotation] = true
-		case startAnnotationString:
-			annotations[StartAnnotation] = true
-		case endAnnotationString:
-			annotations[EndAnnotation] = true
-		}
-	}
+// 	for i := 0; i < len(keywords); i++ {
+// 		switch strings.TrimSpace(keywords[i]) {
+// 		case readAnnotationString:
+// 			annotations[ReadAnnotation] = true
+// 		case startAnnotationString:
+// 			annotations[StartAnnotation] = true
+// 		case endAnnotationString:
+// 			annotations[EndAnnotation] = true
+// 		}
+// 	}
 
-	return annotations, nil
-}
+// 	return annotations, nil
+// }

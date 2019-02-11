@@ -52,8 +52,8 @@ func Read(connection net.Conn, size int) ([]byte, int, error) {
  * be enlarged anytime it has less than 8K free, so we initially allocate
  * twice that.
  */
-func Receive(connection net.Conn, milliSeconds time.Duration) ([]byte, int, error) {
-	buffer := make([]byte, 512*1024)
+func Receive(connection net.Conn, buffer []byte, milliSeconds time.Duration) ([]byte, int, error) {
+	//buffer := make([]byte, 64*1024)
 	err := connection.SetReadDeadline(time.Now().Add(milliSeconds * time.Millisecond))
 	if err != nil {
 		return buffer, 0, err

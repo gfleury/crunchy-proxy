@@ -29,14 +29,14 @@ type Server struct {
 	waitGroup *sync.WaitGroup
 }
 
-func NewServer() *Server {
+func NewServer(el int) *Server {
 	s := &Server{
 		waitGroup: &sync.WaitGroup{},
 	}
 
 	s.admin = NewAdminServer(s)
 
-	s.proxy = proxy.NewProxy()
+	s.proxy = proxy.NewProxy(el)
 
 	return s
 

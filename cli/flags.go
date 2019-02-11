@@ -73,6 +73,12 @@ var (
 		Description: "run process in background",
 		Default:     false,
 	}
+
+	FlagEventLoops = flagInfoString{
+		Name:        "event-loops",
+		Description: "number of event loops to run, default n. vCPU",
+		Default:     "-1",
+	}
 )
 
 func stringFlag(f *pflag.FlagSet, valPtr *string, flagInfo flagInfoString) {
