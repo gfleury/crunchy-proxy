@@ -114,7 +114,7 @@ func handleAuthMD5(connection net.Conn, message []byte) bool {
 	}
 
 	// Read response from password message.
-	message, _, err = Receive(connection)
+	message, _, err = Receive(connection, 1000)
 
 	// Check that read was successful.
 	if err != nil {
@@ -185,7 +185,7 @@ func AuthenticateClient(client net.Conn, message []byte, length int) (bool, erro
 
 	/* Receive startup response. */
 	log.Debug("client auth: receiving startup response from 'master' node")
-	message, length, err = Receive(master)
+	message, length, err = Receive(master, 1000)
 
 	if err != nil {
 		log.Error("An error occurred receiving startup response.")
@@ -207,7 +207,7 @@ func AuthenticateClient(client net.Conn, message []byte, length int) (bool, erro
 			log.Errorf("Error %s", err.Error())
 			return false, err
 		}
-		message, length, err = Receive(client)
+		message, length, err = Receive(client, 1000)
 
 		/*
 		 * Must check that the client has not closed the connection.  This in
@@ -233,7 +233,7 @@ func AuthenticateClient(client net.Conn, message []byte, length int) (bool, erro
 			return false, err
 		}
 
-		message, length, err = Receive(master)
+		message, length, err = Receive(master, 1000)
 		if err != nil {
 			log.Error("An error occurred Reading startup response from master.")
 			log.Errorf("Error %s", err.Error())
@@ -310,4 +310,75 @@ func ValidateClient(message []byte) bool {
 	}
 
 	return (clientUser == creds.Username && clientDatabase == creds.Database)
+}
+
+var userPasswordCache map[string][]byte
+
+func CacheAuth(message []byte) ([]byte, bool) {
+	var clientUser string
+	var clientPassword string
+
+	startup := protocol.NewMessageBuffer(message)
+
+	startup.Seek(8) // Seek past the message length and protocol version.
+
+	for {
+		param, err := startup.ReadString()
+
+		if err == io.EOF || param == "\x00" {
+			break
+		}
+
+		switch param {
+		case "user":
+			clientUser, err = startup.ReadString()
+		case "password":
+			clientPassword, err = startup.ReadString()
+		}
+		if err != nil {
+			log.Error("An error occurred validating the client.")
+			log.Errorf("Error %s", err.Error())
+			return []byte{}, false
+		}
+	}
+
+	response, ok := userPasswordCache[fmt.Sprintf("%s:%s", clientUser, clientPassword)]
+
+	return response, ok
+}
+
+func AddCacheAuth(message, response []byte) {
+	var clientUser string
+	var clientPassword string
+
+	startup := protocol.NewMessageBuffer(message)
+
+	startup.Seek(8) // Seek past the message length and protocol version.
+
+	for {
+		param, err := startup.ReadString()
+
+		if err == io.EOF || param == "\x00" {
+			break
+		}
+
+		switch param {
+		case "user":
+			clientUser, err = startup.ReadString()
+		case "password":
+			clientPassword, err = startup.ReadString()
+		}
+		if err != nil {
+			log.Error("An error occurred validating the client to add to cache.")
+			log.Errorf("Error %s", err.Error())
+			return
+		}
+	}
+
+	if userPasswordCache == nil {
+		userPasswordCache = make(map[string][]byte)
+	}
+
+	log.Errorf("Adding %s:%s to password Cache", clientUser, clientPassword)
+	userPasswordCache[fmt.Sprintf("%s:%s", clientUser, clientPassword)] = response
 }

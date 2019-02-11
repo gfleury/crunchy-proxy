@@ -16,7 +16,8 @@ package proxy
 
 import (
 	"fmt"
-	"io"
+	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -60,7 +61,7 @@ func NewProxy() *Proxy {
 	p.events.Opened = p.Opened
 	p.events.Closed = p.Closed
 
-	p.events.NumLoops = -1
+	p.events.NumLoops = 256
 
 	p.setupPools()
 
@@ -89,7 +90,7 @@ func (p *Proxy) setupPools() {
 		/* Create connections and add to pool. */
 		for i := 0; i < capacity; i++ {
 			/* Connect and authenticate */
-			log.Infof("Connecting to node '%s' at %s...", name, node.HostPort)
+			log.Infof("Pool: Connecting to node '%s' at %s...", name, node.HostPort)
 			connection, err := connect.Connect(node.HostPort)
 
 			if err != nil {
@@ -102,34 +103,34 @@ func (p *Proxy) setupPools() {
 
 			startupMessage, err := protocol.CreateStartupMessage(username, database, options)
 			if err != nil {
-				log.Errorf("Unable to generate startup message to node %s", name)
+				log.Errorf("Pool: Unable to generate startup message to node %s", name)
 				log.Fatal(err.Error())
 			}
 
 			_, err = connection.Write(startupMessage)
 			if err != nil {
-				log.Errorf("Unable to write startup message to node %s", name)
+				log.Errorf("Pool: Unable to write startup message to node %s", name)
 				log.Fatal(err.Error())
 			}
 
 			response := make([]byte, 4096)
 			_, err = connection.Read(response)
 			if err != nil {
-				log.Errorf("Unable to read startup response from node %s", name)
+				log.Errorf("Pool: Unable to read startup response from node %s", name)
 				log.Fatal(err.Error())
 			}
 
 			authenticated := connect.HandleAuthenticationRequest(connection, response)
 
 			if !authenticated {
-				log.Error("Authentication failed")
+				log.Error("Pool: Authentication failed")
 			}
 
 			if err != nil {
-				log.Errorf("Error establishing connection to node '%s'", name)
+				log.Errorf("Pool: Error establishing connection to node '%s'", name)
 				log.Errorf("Error: %s", err.Error())
 			} else {
-				log.Infof("Successfully connected to '%s' at '%s'", name, node.HostPort)
+				log.Infof("Pool: Successfully connected to '%s' at '%s'", name, node.HostPort)
 				newPool.Add(connection)
 			}
 		}
@@ -143,10 +144,16 @@ func (p *Proxy) getPool(read bool) (*pool.Pool, bool) {
 		select {
 		case res := <-p.readPools:
 			return res, read
-		case <-time.After(500 * time.Millisecond):
-			log.Infof("Client: No read Pool available, trying to move foward with write pool")
+		case <-time.After(100 * time.Millisecond):
+			log.Errorf("Pool: No read Pool available, trying to move foward with write pool")
 			read = !read
 		}
+	}
+	select {
+	case res := <-p.writePools:
+		return res, read
+	case <-time.After(100 * time.Millisecond):
+		log.Errorf("!!!!! Pool: No write Pool available, trying to move foward without pool, kkkk")
 	}
 	return <-p.writePools, read
 }
@@ -166,11 +173,13 @@ func (p *Proxy) returnPool(pl *pool.Pool, read bool) {
 func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 	stayHere := true
 
-	log.Debugf("Some data for %s", c.RemoteAddr())
+	remoteAddr := c.RemoteAddr()
 
-	if in == nil {
-		log.Debugf("just a wake from %s", c.RemoteAddr())
-	}
+	log.Debugf("Client: %s, received some data", remoteAddr)
+
+	// if in == nil {
+	// 	log.Debugf("Client: %s, is just a wake", remoteAddr)
+	// }
 
 	client := c.Context().(*Client)
 	clientMessage := client.inputStream.Begin(in)
@@ -181,7 +190,7 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 			/* Get the protocol from the startup message.*/
 			version, err := protocol.GetVersion(clientMessage)
 			if err != nil {
-				log.Errorf("Could not read protocol version from %s", c.RemoteAddr())
+				log.Errorf("Client: %s, Could not read protocol version", remoteAddr)
 				action = evio.Close
 				break
 			}
@@ -198,7 +207,7 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 					err = sslResponse.WriteByte(protocol.SSLNotAllowed)
 				}
 				if err != nil {
-					log.Errorf("Could not write SSL response to %s", c.RemoteAddr())
+					log.Errorf("Client: %s, Could not write SSL response", remoteAddr)
 					action = evio.Close
 					break
 				}
@@ -235,7 +244,7 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 
 			if client.masterConnection == nil {
 				/* Authenticate the client against the appropriate backend. */
-				log.Infof("Client: %s - authenticating", c.RemoteAddr())
+				log.Infof("Client: %s, authenticating", remoteAddr)
 
 				nodes := config.GetNodes()
 
@@ -249,29 +258,46 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 					}
 
 					out = pgError.GetMessage()
-					log.Errorf("Could not validate client %s", c.RemoteAddr())
+					log.Errorf("Client: %s, Could not validate client", remoteAddr)
 					action = evio.Close
 					break
 				}
 
+				// if response, ok := connect.CacheAuth(clientMessage); ok {
+				// 	log.Errorf("Found cached!!!")
+				// 	client.phase = AUTHENTICATED
+				// 	clientMessage = []byte{}
+
+				// 	// message := protocol.NewMessageBuffer([]byte{})
+				// 	// message.WriteByte(protocol.AuthenticationMessageType)
+				// 	// message.WriteInt32(0)
+				// 	// message.WriteInt32(protocol.AuthenticationOk)
+
+				// 	// message.ResetLength(protocol.PGMessageLengthOffset)
+
+				// 	// out = message.Bytes()
+				// 	out = response
+				// 	break
+				// }
+
 				/* Establish a connection with the master node. */
-				log.Info("client auth: connecting to 'master' node")
+				log.Infof("Client: %s, auth connecting to 'master' node", remoteAddr)
 
 				client.masterConnection, err = connect.Connect(node.HostPort)
 
 				if err != nil {
-					log.Error("An error occurred connecting to the master node")
+					log.Errorf("Client: %s, an error occurred connecting to the master node", remoteAddr)
 					log.Errorf("Error %s", err.Error())
 					action = evio.Close
 					break
 				}
 
 				/* Relay the startup message to master node. */
-				log.Debugf("client auth: relay startup message to 'master' node")
+				log.Debugf("Client: %s, auth relay startup message to 'master' node", remoteAddr)
 				_, err = client.masterConnection.Write(clientMessage)
 
 				if err != nil {
-					log.Error("An error occurred writing the authentication to master node.")
+					log.Errorf("Client: %s, an error occurred writing the authentication to master node", remoteAddr)
 					log.Errorf("Error %s", err.Error())
 					action = evio.Close
 					client.masterConnection.Close()
@@ -279,11 +305,11 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 				}
 
 				/* Receive startup response. */
-				log.Infof("client auth: receiving startup response from 'master' node")
-				message, length, err := connect.Receive(client.masterConnection)
+				log.Infof("Client: %s, auth receiving startup response from 'master' node", remoteAddr)
+				message, length, err := connect.Receive(client.masterConnection, 1000)
 
 				if err != nil {
-					log.Error("An error occurred receiving startup response.")
+					log.Errorf("Client: %s, an error occurred receiving startup response", remoteAddr)
 					log.Errorf("Error %s", err.Error())
 					action = evio.Close
 					client.masterConnection.Close()
@@ -294,66 +320,22 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 
 				if protocol.IsAuthenticationOk(message) &&
 					(messageType != protocol.ErrorResponseMessageType) {
-					log.Debugf("client auth: checking authentication response")
+					log.Debugf("Client: %s, auth checking authentication response", remoteAddr)
 					termMsg := protocol.GetTerminateMessage()
 					_, err = connect.Send(client.masterConnection, termMsg)
 					if err != nil {
-						log.Errorf("Failed to write to master termination message to %s, doesn't matter right now, continuing anyway.", client.masterConnection.RemoteAddr())
+						log.Errorf("Client: %s, failed to write to master termination message to %s, doesn't matter right now, continuing anyway.", remoteAddr, client.masterConnection.RemoteAddr())
 					}
 					client.phase = AUTHENTICATED
+					// connect.AddCacheAuth(clientMessage, message[:length])
 				}
 				out = message[:length]
 				clientMessage = []byte{}
+				/* Close master authentication connection */
+				client.masterConnection.Close()
+				client.masterConnection = nil
+
 				break
-			} else {
-				_, err := connect.Send(client.masterConnection, clientMessage)
-
-				if (err != nil) && (err == io.EOF) {
-					log.Errorf("The master closed the connection.")
-					action = evio.Close
-					break
-				}
-
-				message, length, err := connect.Receive(client.masterConnection)
-
-				if (err != nil) && (err == io.EOF) {
-					log.Errorf("The master closed the connection.")
-					log.Errorf("If the client is 'psql' and the authentication method " +
-						"was 'password', then this behavior is expected.")
-					action = evio.Close
-					break
-				}
-
-				if protocol.IsAuthenticationOk(message) {
-					log.Debugf("client auth: checking authentication response")
-					termMsg := protocol.GetTerminateMessage()
-					_, err = connect.Send(client.masterConnection, termMsg)
-					if err != nil {
-						log.Errorf("Failed to write to master termination message to %s, doesn't matter right now, continuing anyway.", client.masterConnection.RemoteAddr())
-					}
-					client.phase = AUTHENTICATED
-					log.Infof("Client: %s - authentication successful", c.RemoteAddr())
-				} else if protocol.GetMessageType(clientMessage) == protocol.ErrorResponseMessageType {
-					err := protocol.ParseError(clientMessage)
-					log.Error("Error occurred on client startup.")
-					log.Errorf("Error: %s", err.Error())
-					action = evio.Close
-				} else if protocol.GetMessageType(clientMessage) == protocol.PasswordMessageMessageType {
-					log.Error("Authentication with master failed.")
-					action = evio.Close
-				} else {
-					log.Error("Unknown error occurred on client startup.")
-					action = evio.Close
-				}
-
-				out = message[:length]
-				clientMessage = []byte{}
-
-				/* Defer close master authentication connection */
-				defer func() {
-					client.masterConnection.Close()
-					client.masterConnection = nil
-				}()
 			}
 
 		case AUTHENTICATED:
@@ -368,50 +350,68 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 				 * determine which backend we need to send it to.
 				 */
 				if messageType == protocol.TerminateMessageType {
-					log.Infof("Client: %s - disconnected", c.RemoteAddr())
+					log.Infof("Client: %s, disconnected", remoteAddr)
 					action = evio.Close
 					break
 				} else if messageType == protocol.QueryMessageType && client.poolConnection == nil {
-					log.Infof("Client: Allocating connection from pool to client %s", c.RemoteAddr())
+					log.Infof("Client: %s, allocating connection from pool", remoteAddr)
 					client.poolConnection = &poolConnection{
 						messageMissingBytes: 0,
+						transactionBlock:    false,
 					}
 
-					annotations, err := getAnnotations(clientMessage)
-					if err != nil {
-						log.Errorf("Failed to get annotations from connection %s: %s", c.RemoteAddr(), err.Error())
-						action = evio.Close
-						break
-					}
-					// if annotations[StartAnnotation] {
-					// 	client.poolConnection.transactionBlock = true
-					// } else if annotations[EndAnnotation] {
-					// 	client.poolConnection.transactionBlock = false
+					// annotations, err := getAnnotations(clientMessage)
+					// if err != nil {
+					// 	log.Errorf("Client: %s, failed to get annotations from connection: %s", remoteAddr, err.Error())
+					// 	action = evio.Close
+					// 	break
 					// }
 
-					client.poolConnection.transactionBlock = false
-					client.poolConnection.read = annotations[ReadAnnotation]
+					// client.poolConnection.read = annotations[ReadAnnotation]
+					client.poolConnection.read = false
 
 					/*
 					 * If not in a statement block or if the pool or backend are not already
 					 * set, then fetch a new backend to receive the message.
 					 */
-					if !client.poolConnection.transactionBlock || client.poolConnection.cp == nil || client.poolConnection.backend == nil {
-						client.poolConnection.cp, client.poolConnection.read = s.getPool(client.poolConnection.read)
-						client.poolConnection.backend = client.poolConnection.cp.Next()
-						client.poolConnection.nodeName = client.poolConnection.cp.Name
-						s.returnPool(client.poolConnection.cp, client.poolConnection.read)
+					var hasConnection bool
+					client.poolConnection.cp, client.poolConnection.read = s.getPool(client.poolConnection.read)
+					s.returnPool(client.poolConnection.cp, client.poolConnection.read)
+					client.poolConnection.backend, hasConnection = client.poolConnection.cp.Next()
+					if !hasConnection {
+						client.poolConnection = nil
+						log.Infof("Client: %s, unable to get a connection from the pool", remoteAddr)
+						// Wakeup the thread in 1000 millisecond to try again
+						go func() {
+							time.Sleep(200 * time.Millisecond)
+							c.Wake()
+						}()
+						break
+					}
+					client.poolConnection.nodeName = client.poolConnection.cp.Name
+
+					msgFirstBytes := strings.ToUpper(string(clientMessage[5:10]))
+					if msgFirstBytes == "BEGIN" {
+						client.poolConnection.transactionBlock = true
 					}
 
+					log.Debugf("Client: %s, MSG: %s", remoteAddr, msgFirstBytes)
 					/* Update the query count for the node being used. */
 					// s.p.lock.Lock()
 					//s.p.Stats[client.poolConnection.nodeName] += 1
 					// s.p.lock.Unlock()
 
+				} else if messageType == protocol.QueryMessageType {
+					msgFirstBytes := strings.ToUpper(string(clientMessage[5:10]))
+					if msgFirstBytes == "COMMI" || msgFirstBytes[:3] == "END" {
+						client.poolConnection.transactionBlock = false
+					}
+					log.Debugf("Client: %s, MSG: %s", remoteAddr, string(clientMessage[5:]))
 				}
-				/* Relay message to client and backend */
+
+				/* Relay message from client to backend */
 				if _, err := connect.Send(client.poolConnection.backend, clientMessage); err != nil {
-					log.Errorf("Error sending message to backend %s", client.poolConnection.backend.RemoteAddr())
+					log.Errorf("Client: %s, error sending message to backend %s", remoteAddr, client.poolConnection.backend.RemoteAddr())
 					log.Errorf("Error: %s", err.Error())
 					client.ReleaseBackend()
 					action = evio.Close
@@ -424,17 +424,30 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 			 * 1   - MessageType
 			 * 2-5 - MessageLength
 			 */
-			message, length, err := connect.Receive(client.poolConnection.backend)
+			message, length, err := connect.Receive(client.poolConnection.backend, 5)
 			for err == nil && length < 5 {
+				log.Infof("Client: %s, trying to read up to 5 bytes on first read", remoteAddr)
 				var restPiece []byte
 				var newLength int
 				restPiece, newLength, err = connect.Read(client.poolConnection.backend, 5-length)
 				message = append(message, restPiece...)
 				length += newLength
 			}
-			if err != nil {
-				log.Errorf("Error receiving response from backend %s", client.poolConnection.backend.RemoteAddr())
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				clientMessage = []byte{}
+				log.Infof("Client: %s, timing out, already read %d", remoteAddr, length)
+				// Wakeup the thread in 1000 millisecond to try again
+				go func() {
+					time.Sleep(50 * time.Millisecond)
+					c.Wake()
+				}()
+				break
+			} else if err != nil {
+				log.Errorf("Client: %s, error receiving response from backend %s - LINE455", remoteAddr, client.poolConnection.backend.LocalAddr())
 				log.Errorf("Length: %d, %s", length, err.Error())
+				for err == nil {
+					err = connect.Flush(client.poolConnection.backend)
+				}
 				client.ReleaseBackend()
 				action = evio.Close
 				break
@@ -445,46 +458,57 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 			 */
 			var messageType byte
 			var messageLength int32
+			var start int
 
-			for start := int(client.poolConnection.messageMissingBytes); start < length; {
+			for start = int(client.poolConnection.messageMissingBytes); start < length; {
 				messageType = protocol.GetMessageType(message[start:])
 				if (length - start) < 5 {
-					piecedMessage, newLength, err := connect.Read(client.poolConnection.backend, 5-(length-start))
-					if err != nil {
-						log.Errorf("Error receiving response from backend %s", client.poolConnection.backend.RemoteAddr())
+					log.Infof("Client: %s, trying to read up to 5 bytes", remoteAddr)
+					piecedMessage, newLength, err := connect.Read(client.poolConnection.backend, 1024)
+					if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+						log.Infof("Client: %s, timing out, still read %d", remoteAddr, newLength)
+						continue
+					} else if err != nil {
+						log.Errorf("Client: %s, error receiving response from backend %s - LINE473", remoteAddr, client.poolConnection.backend.RemoteAddr())
 						log.Errorf("Length: %d, %s", length, err.Error())
 						client.ReleaseBackend()
 						action = evio.Close
 						break
 					}
-					message = append(message, piecedMessage...)
+					message = append(message[:length], piecedMessage[:newLength]...)
 					length += newLength
+					log.Infof("Client: %s, read %d and summed to %d, start %d, tried to read 5-%d", remoteAddr, newLength, length, start, (length - start))
 				}
 				messageLength, err = protocol.GetMessageLength(message[start:])
 				if err != nil {
-					log.Errorf("Error unable to get message length from backend %s", client.poolConnection.backend.RemoteAddr())
+					log.Errorf("Client: %s, error unable to get message length from backend %s", remoteAddr, client.poolConnection.backend.RemoteAddr())
 					client.ReleaseBackend()
 					action = evio.Close
 					break
 				}
 
 				if !protocol.ValidBackendMessage(messageType) {
-					log.Errorf("Not a valid backend message type, lost synchronization with server: got message type \"%c\", length %d",
-						messageType, messageLength)
+					log.Errorf("Client: %s, not a valid backend message type, lost synchronization with server: got message type \"%c\", messageLength %d, start %d, length %d",
+						remoteAddr, messageType, messageLength, start, length)
 					client.ReleaseBackend()
 					action = evio.Close
 					return
+				} else if messageLength > 30000 {
+					client.phase = READINGLONGMESSAGE
 				}
+
 				/*
 				 * Calculate the next start position, add '1' to the message
 				 * length to account for the message type.
 				 */
 				client.poolConnection.messageMissingBytes = (messageLength - int32(length-start)) + 1
-				log.Debugf("Client: %s MSG type=%c length=%d start=%d readLength=%d missingBytes=%d", c.RemoteAddr(), messageType, messageLength, start, length, client.poolConnection.messageMissingBytes)
+				log.Debugf("Client: %s, MSG type=%c length=%d start=%d readLength=%d missingBytes=%d", remoteAddr, messageType, messageLength, start, length, client.poolConnection.messageMissingBytes)
 				start = (start + int(messageLength) + 1)
 			}
 			if client.poolConnection.messageMissingBytes < 0 {
 				client.poolConnection.messageMissingBytes = 0
+			} else {
+				log.Infof("Client: %s, Leaving %d bytes to read afterwards, start: %d, length: %d, messageLength: %d", remoteAddr, client.poolConnection.messageMissingBytes, start, length, messageLength)
 			}
 
 			out = message[:length]
@@ -500,11 +524,15 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 
 		case READINGLONGMESSAGE:
 			stayHere = false
-			log.Debugf("Client: reading long messaging from %s, remaining bytes %d", client.poolConnection.backend.RemoteAddr(), client.poolConnection.messageMissingBytes)
+			log.Infof("Client: %s, reading long messaging from %s, remaining bytes %d", remoteAddr, client.poolConnection.backend.RemoteAddr(), client.poolConnection.messageMissingBytes)
 
-			message, length, err := connect.Receive(client.poolConnection.backend)
-			if err != nil {
-				log.Errorf("Error receiving response from backend %s", client.poolConnection.backend.RemoteAddr())
+			message, length, err := connect.Receive(client.poolConnection.backend, 10)
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				clientMessage = []byte{}
+				log.Infof("Client: %s, timing out, still read %d", remoteAddr, length)
+				break
+			} else if err != nil {
+				log.Errorf("Client: %s, error receiving response from backend %s - READINGLONGMESSAGE", remoteAddr, client.poolConnection.backend.RemoteAddr())
 				log.Errorf("Error: %s", err.Error())
 				client.ReleaseBackend()
 				action = evio.Close
@@ -527,7 +555,7 @@ func (s *Proxy) Data(c evio.Conn, in []byte) (out []byte, action evio.Action) {
 	}
 	client.inputStream.End(clientMessage)
 
-	log.Debugf("Client: Leaving something %s", c.RemoteAddr())
+	log.Debugf("Client: %s, leaving something", remoteAddr)
 	return
 }
 

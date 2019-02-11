@@ -15,7 +15,9 @@ limitations under the License.
 package pool
 
 import (
+	"github.com/crunchydata/crunchy-proxy/util/log"
 	"net"
+	"time"
 )
 
 type Pool struct {
@@ -36,8 +38,14 @@ func (p *Pool) Add(connection net.Conn) {
 	p.connections <- connection
 }
 
-func (p *Pool) Next() net.Conn {
-	return <-p.connections
+func (p *Pool) Next() (net.Conn, bool) {
+	select {
+	case res := <-p.connections:
+		return res, true
+	case <-time.After(100 * time.Millisecond):
+		log.Infof("Client: No connection available on the selected Pool, putting the connection on hold")
+		return nil, false
+	}
 }
 
 func (p *Pool) Return(connection net.Conn) {

@@ -24,7 +24,7 @@ import (
 )
 
 func Send(connection net.Conn, message []byte) (int, error) {
-	err := connection.SetWriteDeadline(time.Now().Add(5000 * time.Millisecond))
+	err := connection.SetWriteDeadline(time.Now().Add(50 * time.Millisecond))
 	if err != nil {
 		return 0, err
 	}
@@ -33,7 +33,7 @@ func Send(connection net.Conn, message []byte) (int, error) {
 
 func Read(connection net.Conn, size int) ([]byte, int, error) {
 	buffer := make([]byte, size)
-	err := connection.SetReadDeadline(time.Now().Add(2500 * time.Millisecond))
+	err := connection.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
 	if err != nil {
 		return buffer, 0, err
 	}
@@ -52,9 +52,9 @@ func Read(connection net.Conn, size int) ([]byte, int, error) {
  * be enlarged anytime it has less than 8K free, so we initially allocate
  * twice that.
  */
-func Receive(connection net.Conn) ([]byte, int, error) {
-	buffer := make([]byte, 8*1024)
-	err := connection.SetReadDeadline(time.Now().Add(2500 * time.Millisecond))
+func Receive(connection net.Conn, milliSeconds time.Duration) ([]byte, int, error) {
+	buffer := make([]byte, 512*1024)
+	err := connection.SetReadDeadline(time.Now().Add(milliSeconds * time.Millisecond))
 	if err != nil {
 		return buffer, 0, err
 	}
@@ -68,7 +68,7 @@ func Flush(connection net.Conn) error {
 	/* Flushing the remaning data in the connection */
 	for err == nil {
 		buffer := make([]byte, 8*1024)
-		err = connection.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		err = connection.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
 		if err != nil {
 			return err
 		}

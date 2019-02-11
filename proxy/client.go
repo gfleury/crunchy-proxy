@@ -1,7 +1,7 @@
 package proxy
 
 import (
-	"github.com/crunchydata/crunchy-proxy/connect"
+	// "github.com/crunchydata/crunchy-proxy/connect"
 	"github.com/crunchydata/crunchy-proxy/util/log"
 	"net"
 
@@ -41,12 +41,12 @@ func (client *Client) ReleaseBackend() {
 	 * then return the connection to the pool.
 	 */
 	if !client.poolConnection.transactionBlock {
-		var err error
+		// var err error
 
 		/* Flushing the remaning data in the connection */
-		for err == nil {
-			err = connect.Flush(client.poolConnection.backend)
-		}
+		// for err == nil {
+		// 	err = connect.Flush(client.poolConnection.backend)
+		// }
 
 		/* Return the backend to the pool it belongs to. */
 		log.Infof("Client: Releasing pool to client %s", client.addr)

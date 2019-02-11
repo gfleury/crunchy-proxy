@@ -6,7 +6,7 @@ server:
 
 nodes:
   master:
-    hostport: 127.0.0.1:5432
+    hostport: 192.168.178.28:5432
     role: master
     metadata: {}
   
@@ -20,7 +20,7 @@ credentials:
     sslmode: disable
 
 pool:
-  capacity: 2
+  capacity: 20
 
 healthcheck:
   delay: 60
